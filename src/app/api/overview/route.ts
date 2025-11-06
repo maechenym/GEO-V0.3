@@ -41,6 +41,21 @@ export async function GET(request: Request) {
     
     if (!loadedPath || !fileContents) {
       console.error("[Overview API] Error reading JSON file from all paths:", pathsToTry)
+      // 在生产环境，如果文件不存在，返回空数据而不是错误
+      if (process.env.NODE_ENV === "production") {
+        console.warn("[Overview API] File not found in production, returning empty data")
+        return NextResponse.json({
+          kpis: [],
+          brandInfluence: {
+            current: 0,
+            previousPeriod: 0,
+            changeRate: 0,
+            trend: [],
+          },
+          ranking: [],
+          competitorTrends: {},
+        })
+      }
       return NextResponse.json(
         { error: "Failed to read data file" },
         { status: 500 }

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 
 /**
- * POST /api/auth/magic-link
+ * POST /api/auth/logout
  * 
- * Fallback API route for magic link (when MSW is not active)
+ * Fallback API route for logout (when MSW is not active)
  * Returns mock data when NEXT_PUBLIC_USE_MOCK=true
  */
 export async function POST(request: NextRequest) {
@@ -12,21 +12,13 @@ export async function POST(request: NextRequest) {
   const useMock = process.env.NEXT_PUBLIC_USE_MOCK !== "false"
   
   if (useMock) {
-    const body = await request.json()
-    const email = (body as { email: string }).email
-
     // Mock response
-    console.log(`[API] Magic link sent to: ${email}`)
     return NextResponse.json({
       ok: true,
     })
   }
 
   // Real mode: 临时返回 mock 数据，避免 501 错误
-  const body = await request.json()
-  const email = (body as { email: string }).email
-
-  console.log(`[API] Magic link sent to: ${email}`)
   return NextResponse.json({
     ok: true,
   })
