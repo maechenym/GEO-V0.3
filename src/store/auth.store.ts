@@ -48,7 +48,7 @@ export const useAuthStore = create<AuthState>()(
       loadProfile: async () => {
         set({ isLoading: true })
         try {
-          const response = await apiClient.get("/auth/session")
+          const response = await apiClient.get("/api/auth/session")
           const data = SessionResponseSchema.parse(response.data)
           
           if (data.ok && data.profile) {
@@ -75,7 +75,7 @@ export const useAuthStore = create<AuthState>()(
       logout: async () => {
         try {
           // 调用登出 API
-          await apiClient.post("/auth/logout")
+          await apiClient.post("/api/auth/logout")
         } catch (error) {
           // 即使 API 失败也清除本地状态
           console.error("Logout error:", error)
