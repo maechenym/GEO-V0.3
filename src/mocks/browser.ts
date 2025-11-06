@@ -59,6 +59,8 @@ export async function initMSW() {
   } catch (error) {
     console.error("❌ Failed to initialize MSW:", error)
     console.error("Error details:", error)
+    // 在静态导出模式下，如果 MSW 失败，返回 null 让应用继续运行
+    console.warn("[MSW] Continuing without MSW - API calls may fail")
     return null
   }
 }

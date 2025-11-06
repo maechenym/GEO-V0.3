@@ -25,9 +25,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
       console.log("[MSW] useMock:", useMock, "NEXT_PUBLIC_USE_MOCK:", process.env.NEXT_PUBLIC_USE_MOCK)
       
       if (useMock) {
+        // 设置超时，避免无限等待
+        const timeout = setTimeout(() => {
+          console.warn("[MSW] Initialization timeout, continuing anyway")
+          setMswReady(true)
+        }, 3000) // 3秒超时
+        
         import("../mocks/browser")
           .then((module) => module.initMSW())
           .then((worker) => {
+            clearTimeout(timeout)
             if (worker) {
               console.log("[MSW] ✅ Worker initialized successfully")
               setMswReady(true)
@@ -37,6 +44,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             }
           })
           .catch((error) => {
+            clearTimeout(timeout)
             console.error("[MSW] ❌ Initialization failed:", error)
             setMswReady(true) // 即使失败也继续，避免阻塞
           })
