@@ -2,13 +2,9 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import type { BrandBasic, Persona, Competitor } from "@/types/brand"
+import type { BrandBasic } from "@/types/brand"
 import { useBrandStore } from "@/store/brand.store"
 import { BrandForm } from "./BrandForm"
-import { PersonasTable } from "./PersonasTable"
-import { CompetitorsTable } from "./CompetitorsTable"
-import { PersonaDialog } from "./PersonaDialog"
-import { CompetitorDialog } from "./CompetitorDialog"
 import { Button } from "@/components/ui/button"
 import { ArrowRight, Save } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
@@ -17,29 +13,21 @@ import { useToast } from "@/hooks/use-toast"
  * 新手引导 Step1 - 品牌信息录入页
  * 
  * 路径：/onboarding/brand
- * 目的：手动录入品牌信息；手动管理 Personas、Competitors；支持增删改；点击 Next → /onboarding/prompt
+ * 目的：手动录入品牌信息；点击 Next → /onboarding/prompt
  * 
  * 布局：
  * - 左侧：步骤指示器（Brand → Prompt → Plan）
- * - 右侧：表单区 + 结果区（Personas/Competitors 两张卡）+ 底部操作区
+ * - 右侧：表单区 + 底部操作区
  */
 export default function BrandOnboardingPage() {
   const router = useRouter()
   const { toast } = useToast()
   const {
     basic,
-    personas,
-    competitors,
     setBasic,
-    addPersona,
-    removePersona,
-    addCompetitor,
-    removeCompetitor,
     setCompleted,
   } = useBrandStore()
 
-  const [personaDialogOpen, setPersonaDialogOpen] = useState(false)
-  const [competitorDialogOpen, setCompetitorDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // 处理表单值变化
@@ -77,103 +65,53 @@ export default function BrandOnboardingPage() {
     router.push("/onboarding/prompt")
   }
 
-  // 添加 Persona
-  const handleAddPersona = (persona: { id: string; name: string; region: string; description?: string }) => {
-    addPersona(persona as Persona)
-    setPersonaDialogOpen(false)
-    toast({
-      title: "角色已添加",
-      description: `已成功添加角色：${persona.name}`,
-    })
-  }
-
-  // 添加 Competitor
-  const handleAddCompetitor = (competitor: { id: string; brandName: string; productName: string }) => {
-    addCompetitor(competitor as Competitor)
-    setCompetitorDialogOpen(false)
-    toast({
-      title: "竞争对手已添加",
-      description: `已成功添加竞争对手：${competitor.brandName}`,
-    })
-  }
-
   return (
-    <>
-      <div className="container mx-auto px-6 py-12 max-w-6xl">
-        <div className="space-y-8">
-          {/* 头部文案 */}
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold mb-3 text-foreground">
-              Let's build your brand together!
-            </h1>
-            <p className="text-lg text-muted-foreground">
-              Define your brand and audience to start your AI journey.
-            </p>
-          </div>
+    <div className="container mx-auto px-6 py-12 max-w-6xl">
+      <div className="space-y-8">
+        {/* 头部文案 */}
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold mb-3 text-foreground">
+            Let's build your brand together!
+          </h1>
+          <p className="text-lg text-muted-foreground">
+            Define your brand and audience to start your AI journey.
+          </p>
+        </div>
 
-          {/* 品牌基本信息表单 */}
-          <BrandForm
-            defaultValues={basic || undefined}
-            onValuesChange={handleFormChange}
-          />
+        {/* 品牌基本信息表单 */}
+        <BrandForm
+          defaultValues={basic || undefined}
+          onValuesChange={handleFormChange}
+        />
 
-          {/* Personas 表格 */}
-          <PersonasTable
-            personas={personas}
-            onAdd={() => setPersonaDialogOpen(true)}
-            onRemove={removePersona}
-          />
+        {/* 底部操作区 */}
+        <div className="flex items-center justify-between pt-6 border-t border-border">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleSaveDraft}
+            disabled={isSubmitting}
+          >
+            <Save className="mr-2 h-4 w-4" />
+            保存草稿
+          </Button>
 
-          {/* Competitors 表格 */}
-          <CompetitorsTable
-            competitors={competitors}
-            onAdd={() => setCompetitorDialogOpen(true)}
-            onRemove={removeCompetitor}
-          />
-
-          {/* 底部操作区 */}
-          <div className="flex items-center justify-between pt-6 border-t border-border">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleSaveDraft}
-              disabled={isSubmitting}
-            >
-              <Save className="mr-2 h-4 w-4" />
-              保存草稿
-            </Button>
-
-            <Button
-              type="button"
-              onClick={handleNext}
-              disabled={isSubmitting || !basic?.brandName || !basic?.productName}
-              className="bg-[#0000D2] hover:bg-[#0000D2]/90 text-white px-8"
-            >
-              {isSubmitting ? (
-                "提交中..."
-              ) : (
-                <>
-                  Next <ArrowRight className="ml-2 h-4 w-4" />
-                </>
-              )}
-            </Button>
-          </div>
+          <Button
+            type="button"
+            onClick={handleNext}
+            disabled={isSubmitting || !basic?.brandName || !basic?.productName}
+            className="bg-[#0000D2] hover:bg-[#0000D2]/90 text-white px-8"
+          >
+            {isSubmitting ? (
+              "提交中..."
+            ) : (
+              <>
+                Next <ArrowRight className="ml-2 h-4 w-4" />
+              </>
+            )}
+          </Button>
         </div>
       </div>
-
-      {/* 添加角色弹窗 */}
-      <PersonaDialog
-        open={personaDialogOpen}
-        onOpenChange={setPersonaDialogOpen}
-        onConfirm={handleAddPersona}
-      />
-
-      {/* 添加竞争对手弹窗 */}
-      <CompetitorDialog
-        open={competitorDialogOpen}
-        onOpenChange={setCompetitorDialogOpen}
-        onConfirm={handleAddCompetitor}
-      />
-    </>
+    </div>
   )
 }
