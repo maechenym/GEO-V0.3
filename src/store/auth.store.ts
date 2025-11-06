@@ -60,15 +60,33 @@ export const useAuthStore = create<AuthState>()(
           }
           throw new Error("Failed to load profile")
         } catch (error) {
-          set({ isLoading: false })
-          // 如果 token 无效，清除状态
+          set({ isLoading: false, profile: null })
+          // 如果 token 无效，清除状态（但不抛出错误，避免无限重试）
           if (error && typeof error === "object" && "response" in error) {
             const axiosError = error as { response?: { status?: number } }
-            if (axiosError.response?.status === 401) {
-              get().logout()
+            if (axiosError.response?.status === 401 || axiosError.response?.status === 501) {
+              // 清除无效 token，但不抛出错误
+              set({ token: null })
+              if (typeof window !== "undefined") {
+                localStorage.removeItem("token")
+                localStorage.removeItem("auth-storage")
+              }
+              // 返回一个默认的 profile，避免页面卡住
+              return {
+                id: "",
+                email: "",
+                hasBrand: false,
+                role: "Viewer" as const,
+              }
             }
           }
-          throw error
+          // 其他错误也返回默认 profile，避免阻塞
+          return {
+            id: "",
+            email: "",
+            hasBrand: false,
+            role: "Viewer" as const,
+          }
         }
       },
 

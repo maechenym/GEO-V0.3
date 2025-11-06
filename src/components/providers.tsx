@@ -5,12 +5,10 @@ import { useState, useEffect } from "react"
 import { Toaster } from "@/components/ui/toaster"
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  // 生产环境立即设置为 ready，不需要等待 MSW
-  // 在客户端，NODE_ENV 在生产构建时会被替换为 "production"
-  const [mswReady, setMswReady] = useState(() => {
-    if (typeof window === "undefined") return true // 服务端渲染
-    return process.env.NODE_ENV === "production" // 生产环境立即 ready
-  })
+  // 生产环境：立即渲染，完全不等待 MSW
+  // 开发环境：快速初始化 MSW，最多等待 1 秒
+  const isProduction = typeof window !== "undefined" && process.env.NODE_ENV === "production"
+  const [mswReady, setMswReady] = useState(isProduction) // 生产环境立即 ready
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -18,69 +16,68 @@ export function Providers({ children }: { children: React.ReactNode }) {
           queries: {
             staleTime: 60 * 1000,
             refetchOnWindowFocus: false,
+            retry: 1, // 减少重试次数，避免错误累积
           },
         },
       })
   )
 
-  // 初始化 MSW（必须在React Query之前）
+  // 只在开发环境初始化 MSW
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      // 生产环境自动禁用 MSW，使用真实 API
-      const isProduction = process.env.NODE_ENV === "production"
-      const useMock = !isProduction && process.env.NEXT_PUBLIC_USE_MOCK !== "false"
-      console.log("[MSW] useMock:", useMock, "NODE_ENV:", process.env.NODE_ENV, "NEXT_PUBLIC_USE_MOCK:", process.env.NEXT_PUBLIC_USE_MOCK)
-      
-      if (useMock) {
-        // 设置超时，避免无限等待
-        const timeout = setTimeout(() => {
-          console.warn("[MSW] Initialization timeout, continuing anyway")
-          setMswReady(true)
-        }, 2000) // 2秒超时，减少等待时间
-        
-        import("../mocks/browser")
-          .then((module) => module.initMSW())
-          .then((worker) => {
-            clearTimeout(timeout)
-            if (worker) {
-              console.log("[MSW] ✅ Worker initialized successfully")
-              setMswReady(true)
-            } else {
-              console.warn("[MSW] ⚠️ Worker initialization returned null")
-              setMswReady(true) // 即使失败也继续，避免阻塞
-            }
-          })
-          .catch((error) => {
-            clearTimeout(timeout)
-            console.error("[MSW] ❌ Initialization failed:", error)
-            setMswReady(true) // 即使失败也继续，避免阻塞
-          })
-      } else {
-        if (isProduction) {
-          console.log("[MSW] Production environment detected, MSW disabled - using real API")
-        } else {
-          console.log("[MSW] Mock disabled, using real API")
-        }
-        setMswReady(true)
-      }
-    } else {
-      setMswReady(true) // 服务端渲染
+    if (isProduction) {
+      // 生产环境：什么都不做，直接使用 API 路由
+      return
     }
-  }, [])
 
-  // 等待MSW准备就绪后再渲染子组件
-  if (!mswReady) {
+    if (typeof window === "undefined") {
+      setMswReady(true)
+      return
+    }
+
+    // 开发环境：快速初始化 MSW
+    const useMock = process.env.NEXT_PUBLIC_USE_MOCK !== "false"
+    
+    if (!useMock) {
+      setMswReady(true)
+      return
+    }
+
+    // 设置 1 秒超时，快速失败
+    const timeout = setTimeout(() => {
+      console.warn("[MSW] Initialization timeout, continuing")
+      setMswReady(true)
+    }, 1000)
+
+    import("../mocks/browser")
+      .then((module) => module.initMSW())
+      .then((worker) => {
+        clearTimeout(timeout)
+        setMswReady(true) // 无论成功失败都继续
+        if (worker) {
+          console.log("[MSW] ✅ Initialized")
+        }
+      })
+      .catch((error) => {
+        clearTimeout(timeout)
+        console.error("[MSW] ❌ Failed:", error)
+        setMswReady(true) // 失败也继续
+      })
+  }, [isProduction])
+
+  // 生产环境或 MSW 已就绪：立即渲染
+  if (mswReady) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-muted-foreground">Initializing...</div>
-      </div>
+      <QueryClientProvider client={queryClient}>
+        {children}
+        <Toaster />
+      </QueryClientProvider>
     )
   }
 
+  // 开发环境等待 MSW（最多 1 秒）
   return (
-    <QueryClientProvider client={queryClient}>
-      {children}
-      <Toaster />
-    </QueryClientProvider>
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="text-muted-foreground">Initializing...</div>
+    </div>
   )
 }

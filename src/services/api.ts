@@ -42,15 +42,24 @@ apiClient.interceptors.response.use(
         return Promise.reject(error)
       }
       
-      // Clear token and redirect to login
-      if (typeof window !== "undefined") {
+      // Clear token and redirect to login (only once, avoid infinite redirects)
+      if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
         localStorage.removeItem("token")
-        window.location.href = "/login"
+        localStorage.removeItem("auth-storage")
+        // 使用 replace 避免历史记录堆积
+        window.location.replace("/login")
       }
     }
+    
+    // Log other errors but don't cause infinite loops
+    if (error.response?.status && error.response.status >= 500) {
+      console.error("[API] Server error:", error.response.status, url)
+    }
+    
     return Promise.reject(error)
   }
 )
 
 export default apiClient
+
 
