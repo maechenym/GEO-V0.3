@@ -60,7 +60,7 @@ export default function SignupPage() {
   // Sign up 提交
   const onSignup = async (data: SignupForm) => {
     try {
-      const response = await apiClient.post("/auth/signup", { email: data.email })
+      const response = await apiClient.post("/api/auth/signup", { email: data.email })
       const result = SignupResponseSchema.parse(response.data)
 
       if (result.ok) {
@@ -82,7 +82,7 @@ export default function SignupPage() {
   // Send Magic Link
   const onSendMagicLink = async (data: SignupForm) => {
     try {
-      const response = await apiClient.post("/auth/magic-link", { email: data.email })
+      const response = await apiClient.post("/api/auth/magic-link", { email: data.email })
       const result = MagicLinkResponseSchema.parse(response.data)
 
       if (result.ok) {

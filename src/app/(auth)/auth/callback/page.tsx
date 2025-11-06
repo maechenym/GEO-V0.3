@@ -27,7 +27,7 @@ function CallbackContent() {
 
     const verifyToken = async () => {
       try {
-        const response = await apiClient.get(`/auth/magic-link/verify?token=${encodeURIComponent(token)}`)
+        const response = await apiClient.get(`/api/auth/magic-link/verify?token=${encodeURIComponent(token)}`)
         const result = MagicLinkVerifyResponseSchema.parse(response.data)
 
         if (result.ok) {

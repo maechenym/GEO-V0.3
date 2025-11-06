@@ -60,7 +60,7 @@ export default function LoginPage() {
   // Login 提交
   const onLogin = async (data: LoginForm) => {
     try {
-      const response = await apiClient.post("/auth/login", { email: data.email })
+      const response = await apiClient.post("/api/auth/login", { email: data.email })
       const result = LoginResponseSchema.parse(response.data)
 
       if (result.ok) {
@@ -86,7 +86,7 @@ export default function LoginPage() {
   // Send Magic Link
   const onSendMagicLink = async (data: LoginForm) => {
     try {
-      const response = await apiClient.post("/auth/magic-link", { email: data.email })
+      const response = await apiClient.post("/api/auth/magic-link", { email: data.email })
       const result = MagicLinkResponseSchema.parse(response.data)
 
       if (result.ok) {
