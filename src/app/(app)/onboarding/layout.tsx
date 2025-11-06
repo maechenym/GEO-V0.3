@@ -19,9 +19,7 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
   // 根据路径确定当前步骤
   const getCurrentStep = () => {
     if (pathname?.includes("/brand")) return 1
-    if (pathname?.includes("/prompt")) return 2
-    if (pathname?.includes("/plan")) return 3
-    if (pathname?.includes("/ai-analysis")) return 4
+    if (pathname?.includes("/plan")) return 2
     return 1
   }
 
@@ -64,10 +62,10 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
             {/* 移动端横向步骤指示器 */}
             <div className="px-4 pb-4">
               <div className="flex items-center gap-2 overflow-x-auto pb-2">
-              {[1, 2, 3, 4].map((step) => {
+              {[1, 2].map((step) => {
                 const isActive = step === currentStep
                 const isCompleted = step < currentStep
-                const labels = ["Brand", "Prompt", "Plan", "AI-Analysis"]
+                const labels = ["Brand", "Plan"]
                 
                 return (
                   <div key={step} className="flex items-center gap-2 flex-shrink-0">
@@ -87,7 +85,7 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
                     >
                       {labels[step - 1]}
                     </span>
-                    {step < 4 && (
+                    {step < 2 && (
                       <div
                         className={`h-0.5 w-8 transition-colors ${
                           step < currentStep ? "bg-primary" : "bg-muted"

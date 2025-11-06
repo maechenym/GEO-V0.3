@@ -9,9 +9,7 @@ interface Step {
 
 const steps: Step[] = [
   { label: "Brand", step: 1 },
-  { label: "Prompt", step: 2 },
-  { label: "Plan", step: 3 },
-  { label: "AI-Analysis", step: 4 },
+  { label: "Plan", step: 2 },
 ]
 
 interface StepIndicatorProps {
@@ -20,7 +18,7 @@ interface StepIndicatorProps {
 
 /**
  * 步骤指示器组件
- * 显示 Brand → Prompt → Plan → AI-Analysis 四个步骤
+ * 显示 Brand → Plan 两个步骤
  * 当前步骤高亮显示（品牌蓝 #0000D2）
  */
 export function StepIndicator({ currentStep }: StepIndicatorProps) {

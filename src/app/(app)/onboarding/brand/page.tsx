@@ -13,10 +13,10 @@ import { useToast } from "@/hooks/use-toast"
  * 新手引导 Step1 - 品牌信息录入页
  * 
  * 路径：/onboarding/brand
- * 目的：手动录入品牌信息；点击 Next → /onboarding/prompt
+ * 目的：手动录入品牌信息；点击 Next → /onboarding/plan
  * 
  * 布局：
- * - 左侧：步骤指示器（Brand → Prompt → Plan）
+ * - 左侧：步骤指示器（Brand → Plan）
  * - 右侧：表单区 + 底部操作区
  */
 export default function BrandOnboardingPage() {
@@ -62,7 +62,7 @@ export default function BrandOnboardingPage() {
     setCompleted(true)
 
     // 跳转到下一步
-    router.push("/onboarding/prompt")
+    router.push("/onboarding/plan")
   }
 
   return (

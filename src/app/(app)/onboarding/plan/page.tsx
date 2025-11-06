@@ -1,40 +1,66 @@
 "use client"
 
-import { useMemo } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { PlanCard } from "./PlanCard"
-import { PaymentForm } from "./PaymentForm"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { useToast } from "@/hooks/use-toast"
+import { useAuthStore } from "@/store/auth.store"
 
 /**
- * Onboarding Step 3: Plan
+ * Onboarding Step 2: Plan
  * 
  * 路径：/onboarding/plan
- * 目的：选择计划并绑定支付方式，激活 7 天免费试用
+ * 目的：选择计划并加入等待列表
  */
 export default function PlanPage() {
   const router = useRouter()
+  const { toast } = useToast()
+  const { setProfile } = useAuthStore()
+  const [name, setName] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
 
-  // 计算试用结束日期（今天 +7 天）
-  const trialEndsAt = useMemo(() => {
-    const date = new Date()
-    date.setDate(date.getDate() + 7)
-    return date.toISOString()
-  }, [])
+  // 处理加入等待列表
+  const handleJoinWaitlist = async () => {
+    if (!name.trim()) {
+      toast({
+        title: "请输入姓名",
+        description: "姓名为必填项",
+        variant: "destructive",
+      })
+      return
+    }
 
-  // 格式化日期显示
-  const trialEndDate = useMemo(() => {
-    const date = new Date(trialEndsAt)
-    return date.toLocaleDateString("zh-CN", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    })
-  }, [trialEndsAt])
+    setIsLoading(true)
 
-  // 处理支付成功
-  const handleSuccess = () => {
-    // 跳转到 AI 分析页
-    router.push("/onboarding/ai-analysis")
+    try {
+      // 更新用户资料，标记为已完成 onboarding
+      const currentProfile = useAuthStore.getState().profile
+      if (currentProfile) {
+        setProfile({
+          ...currentProfile,
+          hasBrand: true,
+        })
+      }
+
+      toast({
+        title: "已加入等待列表",
+        description: `感谢 ${name}，我们会在产品上线时通知您！`,
+      })
+
+      // 跳转到 overview
+      router.push("/overview")
+    } catch (error) {
+      toast({
+        title: "操作失败",
+        description: "请重试",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -46,7 +72,7 @@ export default function PlanPage() {
             开始您的 7 天免费试用
           </h1>
           <p className="text-lg text-muted-foreground">
-            试用期至 {trialEndDate}
+            选择适合您的计划
           </p>
         </div>
 
@@ -57,11 +83,37 @@ export default function PlanPage() {
             <PlanCard />
           </div>
 
-          {/* 右侧：支付表单 */}
+          {/* 右侧：等待列表表单 */}
           <div>
             <div className="rounded-2xl border border-border bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-semibold text-foreground mb-6">支付信息</h2>
-              <PaymentForm onSuccess={handleSuccess} />
+              <h2 className="text-xl font-semibold text-foreground mb-6">加入等待列表</h2>
+              
+              <div className="space-y-6">
+                {/* 姓名输入 */}
+                <div className="space-y-2">
+                  <Label htmlFor="name">
+                    姓名 <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="请输入您的姓名"
+                    disabled={isLoading}
+                  />
+                </div>
+
+                {/* 提交按钮 */}
+                <Button
+                  type="button"
+                  onClick={handleJoinWaitlist}
+                  className="w-full bg-[#0000D2] hover:bg-[#0000D2]/90 text-white"
+                  size="lg"
+                  disabled={isLoading || !name.trim()}
+                >
+                  {isLoading ? "处理中..." : "加入等待列表"}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -69,7 +121,7 @@ export default function PlanPage() {
         {/* 页脚合规文案 */}
         <div className="text-center py-6">
           <p className="text-xs text-muted-foreground">
-            Data secured by GEO · Powered by Stripe
+            Data secured by GEO
           </p>
         </div>
       </div>
