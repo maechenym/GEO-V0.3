@@ -556,16 +556,11 @@ export default function SentimentPage() {
                           const endIndex = Math.min(startIndex + brandsPerPage, totalBrands)
                           const paginatedBrands = sortedRanking.slice(startIndex, endIndex)
                           
-                          // Display delta based on mode: 1day shows rank change (integer), multi-day shows percentage
+                          // Display delta as rank change (integer) for both modes
                           const formatDelta = (delta: number | undefined) => {
                             if (delta === undefined || delta === 0) return null
-                            if (isOneDay) {
-                              // 1day mode: delta is rank change (integer)
-                              return delta > 0 ? `+${delta}` : `${delta}`
-                            } else {
-                              // Multi-day mode: delta is percentage
-                              return delta > 0 ? `+${delta.toFixed(1)}%` : `${delta.toFixed(1)}%`
-                            }
+                            // Always show rank change as integer
+                            return delta > 0 ? `+${delta}` : `${delta}`
                           }
                           
                           return (
@@ -598,7 +593,7 @@ export default function SentimentPage() {
                                       if (deltaStr === null) {
                                         return (
                                           <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
-                                            <span className="text-sm font-medium">{isOneDay ? "0" : "0%"}</span>
+                                            <span className="text-sm font-medium">0</span>
                                           </div>
                                         )
                                       }
@@ -667,7 +662,7 @@ export default function SentimentPage() {
                                           if (deltaStr === null) {
                                             return (
                                               <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
-                                                <span className="text-sm font-medium">{isOneDay ? "0" : "0%"}</span>
+                                                <span className="text-sm font-medium">0</span>
                                               </div>
                                             )
                                           }

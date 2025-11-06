@@ -38,7 +38,7 @@ export type SentimentKpis = z.infer<typeof SentimentKpisSchema>
 export const RankingItemSchema = z.object({
   brand: z.string(),
   value: z.number(), // Sentiment score (0-1 range)
-  delta: z.number().optional(), // Change vs previous period (rank change for 1day, percentage for multi-day)
+  delta: z.number().optional(), // Rank change (integer, positive = rank up, negative = rank down)
   rank: z.number().optional(), // Ranking position
   isSelf: z.boolean().optional(),
 })
@@ -84,7 +84,7 @@ export interface SentimentTrendData {
 export interface SentimentRankingItem {
   brand: string
   value: number // 0-1 range
-  delta: number // rank change for 1day, percentage for multi-day
+  delta: number // Rank change (integer, positive = rank up, negative = rank down)
   rank: number
   isSelf: boolean
 }

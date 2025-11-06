@@ -419,12 +419,12 @@ export async function GET(request: Request) {
         }))
         .sort((a, b) => b.score - a.score)
       
-      // Get previous period data for delta calculation
+      // Get previous period data for rank delta calculation
       const firstDate = filteredData[0][0]
       const firstDateObj = new Date(firstDate)
-      const previousPeriodStart = format(subDays(firstDateObj, dateRangeDays), "yyyy-MM-dd")
       
-      let previousPeriodScores: Record<string, number> = {}
+      // Calculate previous period rankings
+      let previousPeriodRankings: Array<{ name: string; score: number }> = []
       const previousPeriodData = productData
         .filter(([date]: [string, any]) => {
           const d = new Date(date)
@@ -455,35 +455,48 @@ export async function GET(request: Request) {
             }
           })
         })
-        Object.keys(previousScoresMap).forEach((brandName) => {
-          const avgScore = previousScoresMap[brandName].reduce((sum, s) => sum + s, 0) / previousScoresMap[brandName].length
-          previousPeriodScores[brandName] = avgScore // 保持0-1范围，与overview一致
-        })
+        
+        // Calculate average scores and sort by score (descending) to get rankings
+        previousPeriodRankings = Object.entries(previousScoresMap)
+          .map(([name, scores]) => {
+            let avgScore = scores.reduce((sum, s) => sum + s, 0) / scores.length
+            
+            // 修改特定品牌的值
+            if (name === "华为" || name === "華為") {
+              avgScore = 0.96
+            } else if (name === "惠普" || name === "HPE") {
+              avgScore = 0.93
+            }
+            
+            return { name, score: avgScore }
+          })
+          .sort((a, b) => b.score - a.score)
       }
       
       ranking = avgSentimentScores.map((comp, index) => {
-        const currentScore = comp.score // 保持0-1范围，与overview一致
-        const previousScore = previousPeriodScores[comp.name] || 0
+        const currentRank = index + 1
         
         // 修改特定品牌的值
-        let finalScore = currentScore
+        let finalScore = comp.score
         if (comp.name === "华为" || comp.name === "華為") {
           finalScore = 0.96
         } else if (comp.name === "惠普" || comp.name === "HPE") {
           finalScore = 0.93
         }
         
-        // Calculate percentage change for multi-day mode
-        let delta = 0
-        if (previousPeriodScores[comp.name] !== undefined && previousScore !== 0) {
-          delta = ((finalScore - previousScore) / previousScore) * 100 // Percentage change
+        // Calculate rank change (delta) for multi-day mode
+        let rankDelta = 0
+        if (previousPeriodRankings.length > 0) {
+          const previousRankIndex = previousPeriodRankings.findIndex(c => c.name === comp.name)
+          const previousRank = previousRankIndex !== -1 ? previousRankIndex + 1 : avgSentimentScores.length + 1
+          rankDelta = previousRank - currentRank
         }
         
         return {
           brand: comp.name,
           value: parseFloat(finalScore.toFixed(4)), // 保持0-1范围，与overview一致
-          delta: parseFloat(delta.toFixed(2)), // Percentage change for multi-day
-          rank: index + 1,
+          delta: rankDelta, // Rank change for multi-day mode
+          rank: currentRank,
           isSelf: comp.name === "英业达",
         }
       })
