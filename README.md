@@ -1,0 +1,68 @@
+# GEO V0.3
+
+一个现代化的品牌影响力分析平台，使用 Next.js 14 构建。
+
+## 🚀 在线演示
+
+访问：https://your-app.vercel.app
+
+（部署后更新此链接）
+
+## 📋 功能特性
+
+- ✅ 品牌影响力分析（Overview）
+- ✅ 可见度分析（Visibility）
+- ✅ 情绪分析（Sentiment）
+- ✅ 来源分析（Sources）
+- ✅ 意图分析（Intent）
+- ✅ 多语言支持（英文/繁体中文）
+- ✅ 产品筛选和管理
+- ✅ 团队管理
+
+## 🛠️ 技术栈
+
+- **框架**: Next.js 14 (App Router)
+- **语言**: TypeScript
+- **样式**: Tailwind CSS
+- **UI 组件**: shadcn/ui
+- **状态管理**: Zustand
+- **数据获取**: React Query
+- **图表**: Recharts
+- **Mock**: MSW (Mock Service Worker)
+
+## 📦 本地开发
+
+```bash
+# 安装依赖
+npm install
+
+# 启动开发服务器
+npm run dev
+
+# 构建
+npm run build
+
+# 启动生产服务器
+npm run start
+```
+
+## 🌐 部署
+
+### Vercel 部署（推荐）
+
+1. 推送到 GitHub
+2. 在 [Vercel](https://vercel.com) 导入仓库
+3. 添加环境变量：`NEXT_PUBLIC_USE_MOCK=true`
+4. 点击 Deploy
+
+### GitHub Pages
+
+使用 `.github/workflows/deploy.yml` 自动部署。
+
+## 📝 环境变量
+
+- `NEXT_PUBLIC_USE_MOCK`: 是否使用 Mock 数据（true/false）
+
+## 📄 许可证
+
+MIT
