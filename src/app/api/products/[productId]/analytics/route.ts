@@ -20,9 +20,31 @@ export async function GET(
     // 目前使用productId作为产品名称（假设productId就是产品名称）
     const productName = decodeURIComponent(params.productId)
     
-    // 读取JSON文件
-    const jsonPath = join(process.cwd(), "..", "all_brands_results_20251106_075334.json")
-    const fileContent = readFileSync(jsonPath, "utf-8")
+    // 读取JSON文件（优先从项目 data 目录）
+    const projectRoot = process.cwd()
+    const projectDataPath = join(projectRoot, "data", "all_brands_results_20251106_075334.json")
+    const jsonPath = join(projectRoot, "..", "all_brands_results_20251106_075334.json")
+    const downloadsPath = "/Users/yimingchen/Downloads/all_brands_results_20251106_075334.json"
+    
+    let fileContent: string = ""
+    const pathsToTry = [projectDataPath, downloadsPath, jsonPath]
+    
+    for (const tryPath of pathsToTry) {
+      try {
+        fileContent = readFileSync(tryPath, "utf-8")
+        break
+      } catch {
+        continue
+      }
+    }
+    
+    if (!fileContent) {
+      return NextResponse.json(
+        { error: "Data file not found" },
+        { status: 500 }
+      )
+    }
+    
     const data = JSON.parse(fileContent)
     
     if (!data[productName]) {

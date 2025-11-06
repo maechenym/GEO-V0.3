@@ -44,6 +44,8 @@ export async function GET(request: Request) {
 
     // 读取JSON文件
     const projectRoot = process.cwd()
+    // 优先从项目目录读取（生产环境可用）
+    const projectDataPath = path.resolve(projectRoot, "data", "all_brands_results_20251106_075334.json")
     const jsonFilePath = path.resolve(projectRoot, "..", "all_brands_results_20251106_075334.json")
     const downloadsPath = path.resolve("/Users/yimingchen/Downloads", "all_brands_results_20251106_075334.json")
     const altPath = path.resolve(projectRoot, "documents", "all_brands_results_20251106_075334.json")
@@ -51,11 +53,12 @@ export async function GET(request: Request) {
     let fileContents: string = ""
     let loadedPath: string | null = null
     
-    // 按优先级尝试读取文件
+    // 按优先级尝试读取文件（项目目录优先，适用于生产环境）
     const pathsToTry = [
-      downloadsPath,  // 1. Downloads文件夹（最新数据）
-      jsonFilePath,   // 2. 项目上级目录
-      altPath,        // 3. documents目录
+      projectDataPath,  // 1. 项目 data 目录（生产环境优先）
+      downloadsPath,    // 2. Downloads文件夹（开发环境）
+      jsonFilePath,     // 3. 项目上级目录
+      altPath,          // 4. documents目录
     ]
     
     for (const tryPath of pathsToTry) {

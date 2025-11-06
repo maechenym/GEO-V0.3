@@ -8,8 +8,31 @@ import { join } from "path"
  */
 export async function GET() {
   try {
-    const jsonPath = join(process.cwd(), "..", "all_brands_results_20251106_075334.json")
-    const fileContent = readFileSync(jsonPath, "utf-8")
+    // 读取JSON文件（优先从项目 data 目录）
+    const projectRoot = process.cwd()
+    const projectDataPath = join(projectRoot, "data", "all_brands_results_20251106_075334.json")
+    const jsonPath = join(projectRoot, "..", "all_brands_results_20251106_075334.json")
+    const downloadsPath = "/Users/yimingchen/Downloads/all_brands_results_20251106_075334.json"
+    
+    let fileContent: string = ""
+    const pathsToTry = [projectDataPath, downloadsPath, jsonPath]
+    
+    for (const tryPath of pathsToTry) {
+      try {
+        fileContent = readFileSync(tryPath, "utf-8")
+        break
+      } catch {
+        continue
+      }
+    }
+    
+    if (!fileContent) {
+      return NextResponse.json(
+        { error: "Failed to load products data" },
+        { status: 500 }
+      )
+    }
+    
     const data = JSON.parse(fileContent)
     
     return NextResponse.json(data, {
