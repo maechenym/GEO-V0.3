@@ -8,9 +8,11 @@ import { NextRequest, NextResponse } from "next/server"
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { brandId: string } }
+  { params }: { params: Promise<{ brandId: string }> | { brandId: string } }
 ) {
-  const brandId = params.brandId
+  // Handle both sync and async params (Next.js 15+ uses Promise)
+  const resolvedParams = await Promise.resolve(params)
+  const brandId = resolvedParams.brandId
 
   // Mock personas for 英业达
   if (brandId === "brand_inventec") {
@@ -32,9 +34,11 @@ export async function GET(
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { brandId: string } }
+  { params }: { params: Promise<{ brandId: string }> | { brandId: string } }
 ) {
-  const brandId = params.brandId
+  // Handle both sync and async params (Next.js 15+ uses Promise)
+  const resolvedParams = await Promise.resolve(params)
+  const brandId = resolvedParams.brandId
   const body = await request.json()
 
   return NextResponse.json({

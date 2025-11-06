@@ -8,9 +8,11 @@ import { NextRequest, NextResponse } from "next/server"
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
-  const id = params.id
+  // Handle both sync and async params (Next.js 15+ uses Promise)
+  const resolvedParams = await Promise.resolve(params)
+  const id = resolvedParams.id
 
   // Mock brand data for 英业达
   if (id === "brand_inventec") {
