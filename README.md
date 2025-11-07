@@ -45,24 +45,3 @@ npm run build
 # 启动生产服务器
 npm run start
 ```
-
-## 🌐 部署
-
-### Vercel 部署（推荐）
-
-1. 推送到 GitHub
-2. 在 [Vercel](https://vercel.com) 导入仓库
-3. 添加环境变量：`NEXT_PUBLIC_USE_MOCK=true`
-4. 点击 Deploy
-
-### GitHub Pages
-
-使用 `.github/workflows/deploy.yml` 自动部署。
-
-## 📝 环境变量
-
-- `NEXT_PUBLIC_USE_MOCK`: 是否使用 Mock 数据（true/false）
-
-## 📄 许可证
-
-MIT
