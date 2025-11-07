@@ -4,9 +4,8 @@
 
 ## 🚀 在线演示
 
-访问：https://your-app.vercel.app
+访问：https://xxx-app.vercel.app
 
-（部署后更新此链接）
 
 ## 📋 功能特性
 
