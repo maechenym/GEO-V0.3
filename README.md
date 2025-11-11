@@ -4,9 +4,8 @@
 
 ## 🚀 在线演示
 
-访问：https://your-app.vercel.app
+访问：https://xxx-app.vercel.app
 
-（部署后更新此链接）
 
 ## 📋 功能特性
 
@@ -18,6 +17,7 @@
 - ✅ 多语言支持（英文/繁体中文）
 - ✅ 产品筛选和管理
 - ✅ 团队管理
+- ✅ Logo上传功能（品牌和产品）
 
 ## 🛠️ 技术栈
 
@@ -45,3 +45,13 @@ npm run build
 # 启动生产服务器
 npm run start
 ```
+
+## 🔧 环境变量
+
+在 `.env.local` 文件中配置以下环境变量：
+
+- `NEXT_PUBLIC_USE_MOCK`: 是否使用 Mock 数据（true/false）
+
+## 📄 许可证
+
+MIT
