@@ -21,6 +21,8 @@ export async function GET(
         id: "brand_inventec",
         name: "英业达 (Inventec)",
         description: "英业达公司产品线",
+        logo: null,
+        website: null,
       },
     })
   }
@@ -31,7 +33,35 @@ export async function GET(
       id: id,
       name: "Brand",
       description: "",
+      logo: null,
+      website: null,
     },
   })
 }
 
+/**
+ * PATCH /api/brands/:id
+ * 
+ * Update brand by ID
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> | { id: string } }
+) {
+  // Handle both sync and async params (Next.js 15+ uses Promise)
+  const resolvedParams = await Promise.resolve(params)
+  const id = resolvedParams.id
+  const body = await request.json()
+
+  // TODO: Update brand in database
+  // For now, return updated brand data
+  return NextResponse.json({
+    brand: {
+      id: id,
+      name: body.name || "Brand",
+      description: body.description ?? null,
+      logo: body.logo ?? null,
+      website: body.website ?? null,
+    },
+  })
+}

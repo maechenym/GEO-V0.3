@@ -260,7 +260,7 @@ export function BrandInfoCard({
 
   if (!brand) {
     return (
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+      <div className="rounded-lg border border-gray-200 bg-white p-6">
         <p className="text-muted-foreground">No brand information available</p>
       </div>
     )
@@ -268,7 +268,7 @@ export function BrandInfoCard({
 
   return (
     <>
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+      <div className="rounded-lg border border-gray-200 bg-white p-6">
         <div className="mb-6">
           <h2 className="text-xl font-semibold mb-1">Brand & Product Information</h2>
           <p className="text-sm text-muted-foreground">Manage your brand and products…</p>
@@ -280,7 +280,7 @@ export function BrandInfoCard({
             <Label htmlFor="brand-name">
               Brand
             </Label>
-            <div className="text-sm font-medium text-foreground py-2">
+            <div className="text-sm font-medium text-gray-900 py-2">
               {brand.name}
             </div>
           </div>
@@ -302,10 +302,10 @@ export function BrandInfoCard({
                 {products.map((product) => (
                   <div
                     key={product.id}
-                    className="flex items-center gap-2 p-3 rounded-lg border border-border bg-card"
+                    className="flex items-center gap-2 p-3 rounded-lg border border-gray-200 bg-white"
                   >
                     <div className="flex-1">
-                      <span className="text-sm font-medium text-foreground">{product.name}</span>
+                      <span className="text-sm font-medium text-gray-900">{product.name}</span>
                       {product.category && (
                         <span className="text-xs text-muted-foreground ml-2">({product.category})</span>
                       )}

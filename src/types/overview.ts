@@ -23,6 +23,19 @@ export interface CompetitorRanking {
   isSelf: boolean
 }
 
+export interface OverviewSource {
+  domain: string
+  mentionCount: number
+  mentionShare: number
+  mentionsSelf: boolean
+}
+
+export interface OverviewTopic {
+  topic: string
+  mentionCount: number
+  mentionShare: number
+}
+
 export interface OverviewData {
   kpis: OverviewKPI[]
   brandInfluence: {
@@ -32,6 +45,14 @@ export interface OverviewData {
     trend: BrandInfluenceData[]
   }
   ranking: CompetitorRanking[]
+  sources: OverviewSource[]
+  topics: OverviewTopic[]
+  competitorTrends?: Record<string, BrandInfluenceData[]>
+  // 实际日期范围（API返回的数据日期范围，已调整）
+  actualDateRange?: {
+    start: string // YYYY-MM-DD
+    end: string // YYYY-MM-DD
+  }
 }
 export interface OverviewQueryParams {
   start?: string

@@ -24,6 +24,33 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 239 100% 41%; /* #0000D2 */
     --radius: 0.5rem;
+
+    /* OpenAI 风格 Design Tokens */
+    /* 基础色彩 */
+    --bg: #ffffff;
+    --bg-muted: #F9FAFB;
+    --text: #111827;
+    --text-muted: #6B7280;
+
+    /* 品牌与语义色彩 */
+    --brand: #0000D2;
+    --good: #16A34A;
+    --bad: #DC2626;
+    --info: #3B82F6;
+
+    /* 圆角&阴影 */
+    --shadow-subtle: 0 1px 2px rgba(17,24,39,0.04);
+
+    /* 字号节奏 */
+    --fz-caption: 11px;
+    --fz-body-sm: 13px;
+    --fz-body: 14px;
+    --fz-title: 16px;
+    --fz-page: 20px;
+
+    /* 页面间距 */
+    --page-x: 40px;
+    --page-y: 32px;
   }
 
   .dark {
@@ -53,8 +80,33 @@
   * {
     @apply border-border;
   }
+  html,
   body {
-    @apply bg-background text-foreground;
+    @apply bg-white text-ink-900 font-sans;
+  }
+
+  /* 移动端滚动优化 */
+  @media (max-width: 640px) {
+    html {
+      -webkit-overflow-scrolling: touch;
+      scroll-behavior: smooth;
+    }
+    body {
+      overscroll-behavior-y: contain;
+    }
+  }
+
+  h1 {
+    @apply text-xl font-semibold tracking-tight;
+  }
+  h2 {
+    @apply text-lg font-medium;
+  }
+  p {
+    @apply text-sm text-ink-700;
+  }
+  a {
+    @apply text-brand-600 hover:underline;
   }
 }
 
@@ -158,6 +210,82 @@
 
 .react-datepicker__month {
   margin: 0;
+}
+
+/* OpenAI 风格组件样式 */
+@layer components {
+  /* 页面容器 */
+  .page {
+    @apply min-h-screen bg-white text-ink-900 px-pageX py-pageY;
+  }
+
+  /* 统一卡片 */
+  .card {
+    @apply rounded-lg border border-ink-200 bg-white p-5 shadow-subtle;
+  }
+
+  /* KPI 卡片 */
+  .kpi {
+    @apply rounded-lg border border-ink-200 bg-white p-4;
+  }
+  .kpi-label {
+    @apply text-2xs text-ink-500 mb-1.5;
+  }
+  .kpi-value {
+    @apply text-xl font-semibold text-ink-900;
+  }
+  .kpi-trend {
+    @apply text-2xs inline-flex items-center gap-1;
+  }
+
+  /* 扁平选择器/输入 */
+  .select {
+    @apply flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-sm;
+  }
+  .select > select {
+    @apply bg-transparent outline-none text-sm;
+  }
+
+  /* 轻量按钮 */
+  .btn {
+    @apply inline-flex items-center justify-center rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-sm text-ink-700 hover:bg-ink-100 transition-colors;
+  }
+  .btn-primary {
+    @apply border-transparent bg-brand-600 text-white hover:opacity-90;
+  }
+
+  /* tag / chip */
+  .chip {
+    @apply inline-flex items-center rounded-full border border-ink-200 bg-ink-100 px-2 py-0.5 text-2xs text-ink-700;
+  }
+
+  /* 标题区 */
+  .section-head {
+    @apply flex items-center justify-between mb-3;
+  }
+  .section-title {
+    @apply text-sm font-medium;
+  }
+  .section-sub {
+    @apply text-2xs text-ink-500;
+  }
+
+  /* 表格（轻边框） */
+  .table-light {
+    @apply w-full border-collapse;
+  }
+  .table-light th {
+    @apply text-2xs font-medium text-ink-500 text-left py-2 border-b border-ink-200;
+  }
+  .table-light td {
+    @apply text-sm text-ink-900 py-2 border-b border-ink-100;
+  }
+}
+
+@layer utilities {
+  .shadow-subtle {
+    box-shadow: var(--shadow-subtle);
+  }
 }
 
 

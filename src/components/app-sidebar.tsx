@@ -14,6 +14,7 @@ import {
   Eye,
   Target,
 } from "lucide-react"
+import { Logo } from "@/components/logo"
 
 interface NavItem {
   title: string
@@ -29,7 +30,7 @@ const navigation: NavItem[] = [
   { title: "Visibility", href: "/insights/visibility", icon: Eye, group: "Insights" },
   { title: "Sentiment", href: "/insights/sentiment", icon: Heart, group: "Insights" },
   { title: "Sources", href: "/insights/sources", icon: FileText, group: "Insights" },
-  { title: "Intent", href: "/insights/intent", icon: Target, group: "Insights" },
+  { title: "Queries", href: "/insights/intent", icon: Target, group: "Insights" },
   // Group C: Settings
   { title: "Team", href: "/settings/team", icon: Users, group: "Settings" },
   { title: "Plan", href: "/settings/plan", icon: TrendingUp, group: "Settings" },
@@ -62,14 +63,16 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
       {/* Logo - 点击跳转到 /overview */}
       <Link
         href="/overview"
-        className="mb-6 px-3 py-2 text-xl font-bold text-primary hover:text-primary/80 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-md transition-colors"
+        className="mb-6 px-3 py-2 flex items-center gap-2 text-xl font-bold text-brand-600 hover:text-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 rounded-lg transition-colors duration-200"
+        aria-label="Go to overview page"
       >
-        ximu
+        <Logo size={24} />
+        <span>ximu</span>
       </Link>
 
       {Object.entries(groupedNav).map(([group, items]) => (
         <div key={group} className="mb-6">
-          <h2 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <h2 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-ink-500">
             {groupTitles[group] || group}
           </h2>
           <div className="space-y-1">
@@ -83,18 +86,19 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
                   href={item.href as any}
                   onClick={onNavigate}
                   className={cn(
-                    "group flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                    "hover:bg-accent hover:text-accent-foreground",
-                    "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-                    isActive && "bg-primary text-primary-foreground",
-                    !isActive && "text-foreground"
+                    "group flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
+                    "hover:bg-ink-50 hover:text-ink-900",
+                    "focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2",
+                    isActive && "bg-brand-600 text-white hover:bg-brand-700",
+                    !isActive && "text-ink-700"
                   )}
                   aria-current={isActive ? "page" : undefined}
+                  aria-label={`Navigate to ${item.title}`}
                 >
                   <Icon
                     className={cn(
-                      "mr-3 h-5 w-5 flex-shrink-0",
-                      isActive ? "text-primary-foreground" : "text-muted-foreground"
+                      "mr-3 h-5 w-5 flex-shrink-0 transition-colors",
+                      isActive ? "text-white" : "text-ink-500 group-hover:text-ink-700"
                     )}
                     aria-hidden="true"
                   />

@@ -22,6 +22,15 @@ export const mockSourceKpis: SourceKpis = {
   avgFrequency: 85.5,
   topSource: "Official Website",
   mentionGrowth: 12.5,
+  coreQueries: 186,
+  totalQueries: 1240,
+  intentDistribution: [
+    { intent: "Information", share: 0.34 },
+    { intent: "Evaluation", share: 0.26 },
+    { intent: "Comparison", share: 0.18 },
+    { intent: "Advice", share: 0.14 },
+    { intent: "Other", share: 0.08 },
+  ],
 }
 
 /**

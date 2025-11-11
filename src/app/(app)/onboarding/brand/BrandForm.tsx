@@ -6,7 +6,6 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { BrandBasicSchema, type BrandBasic } from "@/types/brand"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { FormMessage } from "@/components/ui/form-message"
 
 interface BrandFormProps {
@@ -20,7 +19,6 @@ interface BrandFormProps {
  * 字段：
  * - brandName（必填）
  * - productName（必填）
- * - brandDescription（可选）
  */
 export function BrandForm({ defaultValues, onValuesChange }: BrandFormProps) {
 
@@ -34,7 +32,6 @@ export function BrandForm({ defaultValues, onValuesChange }: BrandFormProps) {
     defaultValues: defaultValues || {
       brandName: "",
       productName: "",
-      brandDescription: "",
     },
     mode: "onChange",
   })
@@ -129,17 +126,6 @@ export function BrandForm({ defaultValues, onValuesChange }: BrandFormProps) {
             <FormMessage message={errors.productName?.message} variant="error" />
           </div>
         </div>
-
-        {/* Brand Description */}
-        <div className="space-y-2">
-          <Label htmlFor="brandDescription">Brand Description (Optional)</Label>
-            <Textarea
-              id="brandDescription"
-              placeholder="Describe your brand..."
-              rows={4}
-              {...register("brandDescription")}
-            />
-          </div>
       </div>
     </div>
   )

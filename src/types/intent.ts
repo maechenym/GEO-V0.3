@@ -46,7 +46,17 @@ export const IntentKpisSchema = z.object({
 
 export type IntentKpis = z.infer<typeof IntentKpisSchema>
 
-export type SortKey = "topicHot" | "rankAsc" | "rankDesc" | "visibility"
+export type SortKey = 
+  | "topicHot" 
+  | "rankAsc" 
+  | "rankDesc" 
+  | "reachAsc"
+  | "reachDesc"
+  | "focusAsc"
+  | "focusDesc"
+  | "sentimentAsc"
+  | "sentimentDesc"
+  | "visibility"
 
 export interface IntentFilters {
   timeRange: { start: string; end: string }
@@ -57,5 +67,6 @@ export interface IntentFilters {
   role?: string
   mentionBrand: boolean
   visibilitySort: "asc" | "desc" | null
+  model?: string // Model filter: "all", "gpt", "gemini", "claude"
 }
 

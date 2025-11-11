@@ -10,15 +10,42 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { LogOut, Mail, Globe } from "lucide-react"
+import { LogOut, Mail, Globe, Calendar, Clock } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { translate } from "@/lib/i18n"
+import { useQuery } from "@tanstack/react-query"
+import apiClient from "@/services/api"
+
+interface CurrentPlan {
+  id: string
+  name: string
+  status: string
+  startDate: string
+  endDate: string
+  remainingDays: number
+  isTrial: boolean
+}
+
+interface PlanResponse {
+  plan: CurrentPlan | null
+}
 
 export default function ProfilePage() {
   const { profile, logout } = useAuthStore()
   const { language, setLanguage } = useLanguageStore()
   const router = useRouter()
+
+  // 获取当前订阅信息
+  const { data: planData, isLoading: planLoading } = useQuery<PlanResponse>({
+    queryKey: ["currentPlan"],
+    queryFn: async () => {
+      const response = await apiClient.get("/api/plan/current")
+      return response.data
+    },
+    staleTime: 5 * 60 * 1000, // 5分钟
+    retry: 1,
+  })
 
   const handleLogout = async () => {
     await logout()
@@ -27,6 +54,27 @@ export default function ProfilePage() {
 
   const handleLanguageChange = (value: string) => {
     setLanguage(value as "en" | "zh-TW")
+  }
+
+  // 格式化日期
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString(language === "zh-TW" ? "zh-TW" : "en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })
+  }
+
+  // 格式化剩余天数
+  const formatRemainingDays = (days: number) => {
+    if (days <= 0) {
+      return language === "zh-TW" ? "已过期" : "Expired"
+    }
+    if (days === 1) {
+      return language === "zh-TW" ? "1 天" : "1 day"
+    }
+    return language === "zh-TW" ? `${days} 天` : `${days} days`
   }
 
   return (
@@ -61,7 +109,7 @@ export default function ProfilePage() {
       </div>
 
       {/* Main Content */}
-      <div className="container mx-auto pl-4 pr-4 pt-4 pb-10 max-w-[1600px]">
+      <div className="container mx-auto px-4 sm:px-pageX py-4 sm:py-pageY max-w-[1600px]">
         <div className="space-y-6">
           {/* Account Information Card */}
           <Card className="rounded-2xl">
@@ -102,6 +150,72 @@ export default function ProfilePage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Subscription Plan Card */}
+          {planData?.plan && (
+            <Card className="rounded-2xl">
+              <CardHeader>
+                <CardTitle className="text-lg">
+                  {translate("Subscription Plan", language)}
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  {translate("Your current subscription details", language)}
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {/* Plan Name */}
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-muted-foreground">
+                      {translate("Plan", language)}
+                    </label>
+                    <p className="text-sm font-semibold">{planData.plan.name}</p>
+                  </div>
+
+                  <div className="h-px bg-border" />
+
+                  {/* Subscription Start Date */}
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      {translate("Subscription Start Date", language)}
+                    </label>
+                    <p className="text-sm">{formatDate(planData.plan.startDate)}</p>
+                  </div>
+
+                  <div className="h-px bg-border" />
+
+                  {/* Subscription End Date */}
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      {translate("Subscription End Date", language)}
+                    </label>
+                    <p className="text-sm">{formatDate(planData.plan.endDate)}</p>
+                  </div>
+
+                  <div className="h-px bg-border" />
+
+                  {/* Remaining Days */}
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      {translate("Remaining Days", language)}
+                    </label>
+                    <p className={`text-sm font-semibold ${
+                      planData.plan.remainingDays <= 3 
+                        ? "text-red-600" 
+                        : planData.plan.remainingDays <= 7 
+                        ? "text-orange-600" 
+                        : "text-green-600"
+                    }`}>
+                      {formatRemainingDays(planData.plan.remainingDays)}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Actions Card */}
           <Card className="rounded-2xl">

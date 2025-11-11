@@ -247,7 +247,7 @@ export default function TeamSettingsPage() {
         </div>
 
         {/* Main Content */}
-        <div className="container mx-auto pl-4 pr-4 pt-4 pb-10 max-w-[1600px]">
+        <div className="container mx-auto px-4 sm:px-pageX py-4 sm:py-pageY max-w-[1600px]">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

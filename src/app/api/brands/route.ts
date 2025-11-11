@@ -14,6 +14,8 @@ export async function GET(request: NextRequest) {
         id: "brand_inventec",
         name: "英业达 (Inventec)",
         description: "英业达公司产品线",
+        logo: null,
+        website: null,
       },
     ],
   })
@@ -32,6 +34,8 @@ export async function POST(request: NextRequest) {
       id: `brand_${Date.now()}`,
       name: body.name || "New Brand",
       description: body.description || "",
+      logo: body.logo || null,
+      website: body.website || null,
     },
   })
 }

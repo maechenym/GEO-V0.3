@@ -4,7 +4,11 @@ import "./globals.css"
 import { Providers } from "@/components/providers"
 import { AuthGuardWrapper } from "@/components/auth-guard-wrapper"
 
-const inter = Inter({ subsets: ["latin"] })
+const inter = Inter({ 
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+})
 
 export const metadata: Metadata = {
   title: "GEO App",

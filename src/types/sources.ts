@@ -19,11 +19,21 @@ export const SourceFrequencySeriesSchema = z.object({
 
 export type SourceFrequencySeries = z.infer<typeof SourceFrequencySeriesSchema>
 
+export const SourceIntentShareSchema = z.object({
+  intent: z.string(),
+  share: z.number(),
+})
+
+export type SourceIntentShare = z.infer<typeof SourceIntentShareSchema>
+
 export const SourceKpisSchema = z.object({
   totalMentions: z.number(),
   avgFrequency: z.number(),
   topSource: z.string().optional(),
   mentionGrowth: z.number().optional(),
+  coreQueries: z.number(),
+  totalQueries: z.number(),
+  intentDistribution: z.array(SourceIntentShareSchema),
 })
 
 export type SourceKpis = z.infer<typeof SourceKpisSchema>
@@ -68,4 +78,5 @@ export interface SourceFilters {
   granularity: Granularity
   category?: string
   platform?: string
+  model?: string // Model filter: "all", "gpt", "gemini", "claude"
 }

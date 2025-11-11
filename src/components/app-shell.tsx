@@ -1,22 +1,26 @@
 "use client"
 
 import { useState } from "react"
+import { usePathname } from "next/navigation"
 import { Menu } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { AppSidebar } from "@/components/app-sidebar"
 import { Button } from "@/components/ui/button"
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const pathname = usePathname()
   
   // 所有页面都不使用顶部 padding，因为都有 header
-  const mainPadding = "px-6 pb-6 pt-0"
+  // 移动端使用较小的内边距
+  const mainPadding = "px-4 sm:px-6 pb-6 pt-0"
 
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex lg:flex-shrink-0">
-        <div className="flex w-48 flex-col border-r border-border bg-card">
+        <div className="flex w-48 flex-col border-r border-ink-200 bg-card">
           <AppSidebar />
         </div>
       </aside>
@@ -24,7 +28,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main Content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Mobile Menu Button */}
-        <div className="lg:hidden border-b border-border bg-background px-4 py-2">
+        <div className="lg:hidden border-b border-ink-200 bg-background px-4 py-2">
           <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
             <SheetTrigger asChild>
               <Button
@@ -44,7 +48,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </SheetContent>
           </Sheet>
         </div>
-        <main className={`flex-1 overflow-y-auto bg-background ${mainPadding}`}>{children}</main>
+        <main className={`flex-1 overflow-y-auto bg-background ${mainPadding}`}>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={pathname}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+            >
+              {children}
+            </motion.div>
+          </AnimatePresence>
+        </main>
       </div>
     </div>
   )

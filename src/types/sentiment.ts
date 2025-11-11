@@ -65,6 +65,7 @@ export interface SentimentFilters {
   platforms: string[]
   intents: string[]
   role?: string
+  model?: string // Model filter: "all", "gpt", "gemini", "claude"
 }
 
 // API Response Types
@@ -94,4 +95,8 @@ export interface SentimentData {
   trends: SentimentTrendData[]
   ranking: SentimentRankingItem[]
   riskTopics: RiskTopic[]
+  actualDateRange?: {
+    start: string // YYYY-MM-DD
+    end: string // YYYY-MM-DD
+  }
 }

@@ -25,6 +25,7 @@ export async function GET(
           description: "英业达机架服务器解决方案",
           category: "服务器",
           active: true,
+          logo: null,
         },
         {
           id: "product_2",
@@ -33,6 +34,7 @@ export async function GET(
           description: "AI服务器产品",
           category: "服务器",
           active: true,
+          logo: null,
         },
         {
           id: "product_3",
@@ -41,6 +43,7 @@ export async function GET(
           description: "通用服务器产品",
           category: "服务器",
           active: true,
+          logo: null,
         },
         {
           id: "product_4",
@@ -49,6 +52,7 @@ export async function GET(
           description: "存储服务器产品",
           category: "服务器",
           active: true,
+          logo: null,
         },
         {
           id: "product_5",
@@ -57,6 +61,7 @@ export async function GET(
           description: "网络交换机产品",
           category: "网络设备",
           active: true,
+          logo: null,
         },
         {
           id: "product_6",
@@ -65,6 +70,7 @@ export async function GET(
           description: "笔记本电脑产品",
           category: "计算机",
           active: true,
+          logo: null,
         },
         {
           id: "product_7",
@@ -73,6 +79,7 @@ export async function GET(
           description: "台式机产品",
           category: "计算机",
           active: true,
+          logo: null,
         },
         {
           id: "product_8",
@@ -81,6 +88,7 @@ export async function GET(
           description: "精简型电脑产品",
           category: "计算机",
           active: true,
+          logo: null,
         },
       ],
     })
@@ -114,6 +122,7 @@ export async function POST(
       description: body.description || "",
       category: body.category || null,
       active: true,
+      logo: body.logo || null,
     },
   })
 }

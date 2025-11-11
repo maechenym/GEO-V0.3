@@ -4,12 +4,36 @@ import { promises as fs } from "fs"
 import { format, subDays } from "date-fns"
 import type { SentimentKPIs, SentimentRankingItem, SentimentTrendData, RiskTopic, SentimentData } from "@/types/sentiment"
 
+const MODEL_KEY_MAP: Record<string, string> = {
+  all: "overall",
+  gpt: "chatgpt",
+  gemini: "gemini",
+  claude: "claude",
+}
+
+const getModelKey = (modelParam: string | null): string => {
+  if (!modelParam) return "overall"
+  const normalized = modelParam.toLowerCase()
+  return MODEL_KEY_MAP[normalized] || "overall"
+}
+
+const getModelData = (dayData: any, modelKey: string): any => {
+  if (!dayData || typeof dayData !== "object") return null
+  const modelData = dayData?.[modelKey]
+  if (modelData && typeof modelData === "object" && Object.keys(modelData).length > 0) {
+    return modelData
+  }
+  return dayData?.overall || null
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const startDate = searchParams.get("startDate") || "2025-10-31"
     const endDate = searchParams.get("endDate") || "2025-11-06"
     const productId = searchParams.get("productId")
+    const modelParam = searchParams.get("model")
+    const modelKey = getModelKey(modelParam)
 
     // 读取JSON文件
     const projectRoot = process.cwd()
@@ -118,16 +142,16 @@ export async function GET(request: Request) {
     if (isOneDayRange) {
       // 1day mode: use latest day's data
       const latestData = filteredData[filteredData.length - 1][1]
-      const overall = latestData.overall
+      const modelData = getModelData(latestData, modelKey)
       
       // SOV: based on total_score
-      const inventecTotalScore = overall.total_score?.["英业达"] || 0
-      const allTotalScores = Object.values(overall.total_score || {}) as number[]
+      const inventecTotalScore = modelData.total_score?.["英业达"] || 0
+      const allTotalScores = Object.values(modelData.total_score || {}) as number[]
       const totalScoreSum = allTotalScores.reduce((sum, score) => sum + score, 0)
       const sov = totalScoreSum > 0 ? (inventecTotalScore / totalScoreSum) * 100 : 0
       
       // Sentiment Index: 直接使用sentiment_score（0-1范围），与overview一致
-      const inventecSentimentScore = overall.sentiment_score?.["英业达"] || 0
+      const inventecSentimentScore = modelData.sentiment_score?.["英业达"] || 0
       const sentimentIndex = inventecSentimentScore
       
       // Positive/Neutral/Negative: estimate based on sentiment_score，确保总和为100%
@@ -174,18 +198,18 @@ export async function GET(request: Request) {
       let dayCount = 0
       
       filteredData.forEach(([date, data]: [string, any]) => {
-        const dayOverall = data.overall
+        const dayModelData = getModelData(data, modelKey)
         
         // SOV
-        const inventecTotalScore = dayOverall.total_score?.["英业达"] || 0
-        const allTotalScores = Object.values(dayOverall.total_score || {}) as number[]
+        const inventecTotalScore = dayModelData.total_score?.["英业达"] || 0
+        const allTotalScores = Object.values(dayModelData.total_score || {}) as number[]
         const totalScoreSum = allTotalScores.reduce((sum, score) => sum + score, 0)
         if (totalScoreSum > 0) {
           sovSum += (inventecTotalScore / totalScoreSum) * 100
         }
         
         // Sentiment Index: 直接使用sentiment_score（0-1范围），与overview一致
-        const inventecSentimentScore = dayOverall.sentiment_score?.["英业达"] || 0
+        const inventecSentimentScore = dayModelData.sentiment_score?.["英业达"] || 0
         sentimentIndexSum += inventecSentimentScore
         
         // Positive/Neutral/Negative
@@ -233,7 +257,7 @@ export async function GET(request: Request) {
       // 1day模式：显示最后两天（11.4和11.5），如果数据不足2天则显示所有可用数据
       const dataForTrend = filteredData.slice(-Math.min(2, filteredData.length))
       trends = dataForTrend.map(([date, data]: [string, any]) => {
-        const dayOverall = data.overall
+        const dayModelData = getModelData(data, modelKey)
         const dateObj = new Date(date)
         const displayDate = format(subDays(dateObj, 1), "yyyy-MM-dd")
         
@@ -242,7 +266,7 @@ export async function GET(request: Request) {
         }
         
         // Add sentiment index for all brands (使用0-1范围，与overview一致)
-        const sentimentScores = dayOverall.sentiment_score || {}
+        const sentimentScores = dayModelData.sentiment_score || {}
         Object.keys(sentimentScores).forEach((brandName) => {
           // 品牌名称映射
           let mappedName = brandName
@@ -264,7 +288,7 @@ export async function GET(request: Request) {
     } else {
       // 多天模式：显示所有数据
       trends = filteredData.map(([date, data]: [string, any]) => {
-        const dayOverall = data.overall
+        const dayModelData = getModelData(data, modelKey)
         const dateObj = new Date(date)
         const displayDate = format(subDays(dateObj, 1), "MM/dd")
         
@@ -273,7 +297,7 @@ export async function GET(request: Request) {
         }
         
         // Add sentiment index for all brands (使用0-1范围，与overview一致)
-        const sentimentScores = dayOverall.sentiment_score || {}
+        const sentimentScores = dayModelData.sentiment_score || {}
         Object.keys(sentimentScores).forEach((brandName) => {
           // 品牌名称映射
           let mappedName = brandName
@@ -300,21 +324,21 @@ export async function GET(request: Request) {
     if (isOneDayRange) {
       // 1day mode: calculate rank changes
       const latestData = filteredData[filteredData.length - 1][1]
-      const latestOverall = latestData.overall
+      const latestModelData = getModelData(latestData, modelKey)
       
       // Get previous day's data for delta calculation
       const latestDate = filteredData[filteredData.length - 1][0]
       const latestDateObj = new Date(latestDate)
       const previousDate = format(subDays(latestDateObj, 1), "yyyy-MM-dd")
       
-      let previousOverall: any = null
+      let previousModelData: any = null
       const previousEntry = productData.find(([date]: [string, any]) => date === previousDate)
       if (previousEntry) {
-        previousOverall = previousEntry[1].overall
+        previousModelData = getModelData(previousEntry[1], modelKey)
       }
       
       // Current day rankings
-      const currentSentimentScores = Object.entries(latestOverall.sentiment_score || {})
+      const currentSentimentScores = Object.entries(latestModelData.sentiment_score || {})
         .map(([name, score]) => {
           // 品牌名称映射
           let mappedName = name
@@ -333,8 +357,8 @@ export async function GET(request: Request) {
       
       // Previous day rankings (if available)
       let previousSentimentScores: Array<{ name: string; score: number }> = []
-      if (previousOverall) {
-        previousSentimentScores = Object.entries(previousOverall.sentiment_score || {})
+      if (previousModelData) {
+        previousSentimentScores = Object.entries(previousModelData.sentiment_score || {})
           .map(([name, score]) => {
             // 品牌名称映射
             let mappedName = name
@@ -389,8 +413,8 @@ export async function GET(request: Request) {
       const sentimentScoresMap: Record<string, number[]> = {}
       
       filteredData.forEach(([date, data]: [string, any]) => {
-        const dayOverall = data.overall
-        const sentimentScores = dayOverall.sentiment_score || {}
+        const dayModelData = getModelData(data, modelKey)
+        const sentimentScores = dayModelData.sentiment_score || {}
         
         Object.keys(sentimentScores).forEach((brandName) => {
           // 品牌名称映射
@@ -508,15 +532,106 @@ export async function GET(request: Request) {
       })
     }
 
-    // Generate risk topics (placeholder - can be enhanced with actual data)
+    // Extract risk topics from aggregated_sentiment_detail
     const riskTopics: RiskTopic[] = []
-    // TODO: Extract risk topics from aggregated_sentiment_detail or other sources
+    const selfBrandKey = "英业达"
+    
+    // Collect all positive and negative aspects from all days
+    const positiveAspectsMap = new Map<string, number>()
+    const negativeAspectsMap = new Map<string, number>()
+    
+    filteredData.forEach(([date, data]: [string, any]) => {
+      const dayModelData = getModelData(data, modelKey)
+      const aggregated = dayModelData?.aggregated_sentiment_detail?.[selfBrandKey]
+      
+      if (aggregated) {
+        // Extract positive aspects
+        const positiveAspects = Array.isArray(aggregated.positive_aspects) ? aggregated.positive_aspects : []
+        positiveAspects.forEach((aspect: string) => {
+          if (aspect && typeof aspect === "string") {
+            const trimmed = aspect.trim()
+            if (trimmed) {
+              positiveAspectsMap.set(trimmed, (positiveAspectsMap.get(trimmed) || 0) + 1)
+            }
+          }
+        })
+        
+        // Extract negative aspects
+        const negativeAspects = Array.isArray(aggregated.negative_aspects) ? aggregated.negative_aspects : []
+        negativeAspects.forEach((aspect: string) => {
+          if (aspect && typeof aspect === "string") {
+            const trimmed = aspect.trim()
+            if (trimmed) {
+              negativeAspectsMap.set(trimmed, (negativeAspectsMap.get(trimmed) || 0) + 1)
+            }
+          }
+        })
+      }
+    })
+    
+    // Convert to RiskTopic format (top 5 positive and top 5 negative)
+    // Only process if we have aspects
+    if (positiveAspectsMap.size > 0) {
+      // Calculate sentiment scores based on mention count (more mentions = higher score)
+      const positiveCounts = Array.from(positiveAspectsMap.values())
+      const maxPositiveCount = Math.max(...positiveCounts, 1)
+      
+      const topPositiveAspects = Array.from(positiveAspectsMap.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([aspect, count], index) => {
+          // Calculate sentiment score based on count (normalize to 0.7-1.0 range)
+          const normalizedCount = count / maxPositiveCount
+          const sentiment = 0.7 + (normalizedCount * 0.3) // 0.7 to 1.0
+          return {
+            id: `positive_${index}_${aspect.substring(0, 10).replace(/\s/g, '_')}`,
+            prompt: aspect,
+            answer: "", // Not available in current data structure
+            sources: count,
+            sentiment: sentiment,
+          }
+        })
+      
+      riskTopics.push(...topPositiveAspects)
+    }
+    
+    if (negativeAspectsMap.size > 0) {
+      // Calculate sentiment scores based on mention count (more mentions = higher score)
+      const negativeCounts = Array.from(negativeAspectsMap.values())
+      const maxNegativeCount = Math.max(...negativeCounts, 1)
+      
+      const topNegativeAspects = Array.from(negativeAspectsMap.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([aspect, count], index) => {
+          // Calculate sentiment score based on count (normalize to -1.0 to -0.7 range)
+          const normalizedCount = count / maxNegativeCount
+          const sentiment = -0.7 - (normalizedCount * 0.3) // -1.0 to -0.7
+          return {
+            id: `negative_${index}_${aspect.substring(0, 10).replace(/\s/g, '_')}`,
+            prompt: aspect,
+            answer: "", // Not available in current data structure
+            sources: count,
+            sentiment: sentiment,
+          }
+        })
+      
+      riskTopics.push(...topNegativeAspects)
+    }
+
+    // Calculate the actual date range for display (subtract 1 day from file dates)
+    const actualStartDate = format(subDays(new Date(filteredData[0][0]), 1), "yyyy-MM-dd")
+    const actualEndDate = format(subDays(new Date(filteredData[filteredData.length - 1][0]), 1), "yyyy-MM-dd")
 
     const response: SentimentData = {
       kpis,
       trends,
       ranking,
       riskTopics,
+      actualDateRange: {
+        start: actualStartDate,
+        end: actualEndDate,
+      },
     }
 
     return NextResponse.json(response)

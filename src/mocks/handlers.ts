@@ -469,238 +469,38 @@ export const handlers = [
   //   ...
   // }),
 
-  // POST /api/onboarding/prompt/suggest
-  http.post("*/api/onboarding/prompt/suggest", async ({ request }) => {
+  // POST /api/onboarding/prompt/suggest - 已移除（prompt 页面已删除）
+  // GET /api/prompts - 已移除（prompt 页面已删除）
+  // POST /api/prompts - 已移除（prompt 页面已删除）
+  // PATCH /api/prompts/:id - 已移除（prompt 页面已删除）
+  // DELETE /api/prompts/:id - 已移除（prompt 页面已删除）
+
+  // POST /api/analysis/initiate - 已移除（ai-analysis 页面已删除）
+  // GET /api/analysis/status - 已移除（ai-analysis 页面已删除）
+
+  // POST /api/onboarding/waitlist
+  http.post("*/api/onboarding/waitlist", async ({ request }) => {
     const body = await request.json() as {
       brandName?: string
       productName?: string
-      brandDescription?: string
     }
 
-    // 使用 Zod 校验请求体
-    const { PromptSuggestRequestSchema } = await import("@/types/prompt")
-    const validated = PromptSuggestRequestSchema.safeParse(body)
-
-    if (!validated.success) {
+    // 验证必填字段
+    if (!body.brandName || !body.productName) {
       return HttpResponse.json(
         {
-          error: "Invalid request body",
-          details: validated.error.errors,
+          error: "brandName and productName are required",
         },
         { status: 400 }
       )
     }
-
-    // 模拟生成 Prompts
-    // 根据是否有 brandName/productName/brandDescription，生成不同数量和类型的 prompts
-    const hasInfo = validated.data.brandName || validated.data.productName
-    // 返回 6-10 条
-    const promptCount = hasInfo ? Math.floor(Math.random() * 5) + 6 : Math.floor(Math.random() * 4) + 6
-
-    // 国家列表（国家码）
-    const countries = ["US", "UK", "DE", "FR", "JP", "CN", "TW", "HK", "SG", "AU", "IN"]
-
-    // 根据 brandName/productName 生成多样化样例（品牌/品类/用途/对比/渠道等）
-    const brandName = validated.data.brandName || "Brand"
-    const productName = validated.data.productName || "Product"
-    const promptTemplates = hasInfo
-      ? [
-          // 品牌类
-          `Find ${productName} from ${brandName}`,
-          `Why choose ${brandName} ${productName}?`,
-          `${brandName} ${productName} reviews and ratings`,
-          // 品类类
-          `Best ${productName} alternatives and competitors`,
-          `Compare ${productName} options in the market`,
-          `Top-rated ${productName} solutions`,
-          // 用途类
-          `How to use ${productName} effectively for your business`,
-          `${productName} use cases and applications`,
-          `Best practices for ${productName} implementation`,
-          // 对比类
-          `${brandName} vs competitors: Which is better?`,
-          `${productName} comparison: Features and pricing`,
-          // 渠道类
-          `Where to buy ${productName} from ${brandName}`,
-          `${brandName} ${productName} pricing and plans`,
-          `${productName} support and documentation`,
-        ]
-      : [
-          "Find the best solutions for your needs",
-          "Compare products and services",
-          "Top-rated options available",
-          "Expert reviews and recommendations",
-          "Best practices and guides",
-          "Product comparison and alternatives",
-        ]
-
-    const prompts = Array.from({ length: promptCount }, (_, i) => ({
-      id: `prompt_${Date.now()}_${i}`,
-      text: promptTemplates[i % promptTemplates.length],
-      country: countries[i % countries.length],
-    }))
-
-    // 模拟网络延迟
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    return HttpResponse.json({
-      prompts,
-    })
-  }),
-
-  // GET /api/prompts
-  http.get("*/api/prompts", async () => {
-    // 返回空数组或示例数据（实际应从数据库获取）
-    return HttpResponse.json({
-      prompts: [],
-    })
-  }),
-
-  // POST /api/prompts
-  http.post("*/api/prompts", async ({ request }) => {
-    const body = await request.json()
-
-    // 使用 Zod 校验请求体
-    const { CreatePromptRequestSchema, PromptSchema } = await import("@/types/prompt")
-    const validated = CreatePromptRequestSchema.safeParse(body)
-
-    if (!validated.success) {
-      return HttpResponse.json(
-        {
-          error: "Invalid request body",
-          details: validated.error.errors,
-        },
-        { status: 400 }
-      )
-    }
-
-    // 生成新的 prompt
-    const prompt = {
-      id: `prompt_${Date.now()}`,
-      ...validated.data,
-    }
-
-    // 验证返回的数据
-    const result = PromptSchema.parse(prompt)
-
-    return HttpResponse.json({
-      prompt: result,
-    })
-  }),
-
-  // PATCH /api/prompts/:id
-  http.patch("*/api/prompts/:id", async ({ request, params }) => {
-    const body = await request.json()
-    const { id } = params as { id: string }
-
-    // 使用 Zod 校验请求体
-    const { UpdatePromptRequestSchema, PromptSchema } = await import("@/types/prompt")
-    const validated = UpdatePromptRequestSchema.safeParse(body)
-
-    if (!validated.success) {
-      return HttpResponse.json(
-        {
-          error: "Invalid request body",
-          details: validated.error.errors,
-        },
-        { status: 400 }
-      )
-    }
-
-    // 模拟更新（实际应从数据库获取并更新）
-    const prompt = {
-      id,
-      text: validated.data.text || "Updated prompt text",
-      country: validated.data.country || "US",
-    }
-
-    // 验证返回的数据
-    const result = PromptSchema.parse(prompt)
-
-    return HttpResponse.json({
-      prompt: result,
-    })
-  }),
-
-  // DELETE /api/prompts/:id
-  http.delete("*/api/prompts/:id", async () => {
-    // 模拟删除（实际应从数据库删除）
-    return HttpResponse.json({
-      ok: true,
-    })
-  }),
-
-  // POST /api/analysis/initiate
-  http.post("*/api/analysis/initiate", async ({ request }) => {
-    const url = new URL(request.url)
-    const brandId = url.searchParams.get("brandId")
-
-    if (!brandId) {
-      return HttpResponse.json(
-        {
-          error: "brandId is required",
-        },
-        { status: 400 }
-      )
-    }
-
-    // 生成 jobId
-    const jobId = `job_${Date.now()}_${Math.random().toString(36).substring(7)}`
 
     // 模拟网络延迟
     await new Promise((resolve) => setTimeout(resolve, 500))
 
     return HttpResponse.json({
-      jobId,
-      message: "Analysis initiated",
-    })
-  }),
-
-  // GET /api/analysis/status
-  http.get("*/api/analysis/status", async ({ request }) => {
-    const url = new URL(request.url)
-    const jobId = url.searchParams.get("jobId")
-
-    if (!jobId) {
-      return HttpResponse.json(
-        {
-          error: "jobId is required",
-        },
-        { status: 400 }
-      )
-    }
-
-    // 模拟进度（基于 jobId 的时间戳计算进度）
-    const jobTimestamp = parseInt(jobId.split("_")[1] || "0")
-    const elapsed = Date.now() - jobTimestamp
-    const duration = 15000 // 15 秒完成整个分析
-
-    // 计算进度（0-100）
-    let progress = Math.min(Math.floor((elapsed / duration) * 100), 100)
-
-    // 根据进度确定阶段
-    let stage: "Analyzing" | "Mapping" | "Ranking" | "Preparing" | "Completed"
-    if (progress < 25) {
-      stage = "Analyzing"
-    } else if (progress < 50) {
-      stage = "Mapping"
-    } else if (progress < 75) {
-      stage = "Ranking"
-    } else if (progress < 100) {
-      stage = "Preparing"
-    } else {
-      stage = "Completed"
-      progress = 100
-    }
-
-    // 模拟网络延迟
-    await new Promise((resolve) => setTimeout(resolve, 200))
-
-    return HttpResponse.json({
-      jobId,
-      progress,
-      stage,
-      status: progress === 100 ? "completed" : "in_progress",
+      ok: true,
+      message: "Successfully joined waitlist",
     })
   }),
 

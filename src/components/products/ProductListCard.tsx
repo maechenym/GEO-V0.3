@@ -39,7 +39,7 @@ import type { Product } from "@/types/products"
 import { usePlanStore } from "@/store/plan.store"
 import { useBrandUIStore } from "@/store/brand-ui.store"
 import { useLanguageStore } from "@/store/language.store"
-import { useAuthStore } from "@/store/useAuthStore"
+import { useAuthStore } from "@/store/auth.store"
 import {
   useCreateProduct,
   useUpdateProduct,
@@ -55,6 +55,7 @@ interface ProductListCardProps {
 const productSchema = z.object({
   name: z.string().min(1, "Product name is required"),
   category: z.string().optional().nullable(),
+  logo: z.string().optional().nullable(),
 })
 
 type ProductForm = z.infer<typeof productSchema>
@@ -63,8 +64,8 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
   const { getMaxProducts } = usePlanStore()
   const { markSaved } = useBrandUIStore()
   const { language } = useLanguageStore()
-  const { user } = useAuthStore()
-  const isTestAccount = user?.email === "test@example.com"
+  const { profile } = useAuthStore()
+  const isTestAccount = profile?.email === "test@example.com"
   const maxProducts = isTestAccount ? Infinity : getMaxProducts()
   const canAddMore = isTestAccount || products.length < maxProducts
   const activeProducts = products.filter((p) => p.active)
@@ -77,6 +78,7 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
   const [editId, setEditId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [editingLogo, setEditingLogo] = useState<string | null>(null)
 
   const {
     register,
@@ -106,9 +108,11 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
   const handleEditProduct = (product: Product) => {
     setEditingProduct(product)
     setEditId(product.id)
+    setEditingLogo(product.logo || null)
     resetEdit({
       name: product.name,
       category: product.category || "",
+      logo: product.logo || null,
     })
   }
 
@@ -116,11 +120,15 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
     if (!editId) return
     await updateProductMutation.mutateAsync({
       id: editId,
-      data,
+      data: {
+        ...data,
+        logo: editingLogo,
+      },
     })
     resetEdit()
     setEditId(null)
     setEditingProduct(null)
+    setEditingLogo(null)
     markSaved()
   }
 
@@ -141,7 +149,7 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
 
   return (
     <>
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+      <div className="rounded-lg border border-gray-200 bg-white p-6">
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-semibold mb-1">{translate("Products", language)}</h2>
@@ -178,37 +186,37 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-muted/50">
+              <thead className="bg-gray-50">
                 <tr>
                   <th
-                    className="px-6 py-4 text-left text-base font-semibold text-foreground border-b border-border"
+                    className="px-6 py-4 text-left text-sm font-semibold text-gray-900 border-b border-gray-200"
                     aria-label="Product name"
                   >
                     {translate("Product", language)}
                   </th>
                   <th
-                    className="px-6 py-4 text-left text-base font-semibold text-foreground border-b border-border"
+                    className="px-6 py-4 text-left text-sm font-semibold text-gray-900 border-b border-gray-200"
                     aria-label="Product category"
                   >
                     {translate("Category", language)}
                   </th>
                   <th
-                    className="px-6 py-4 text-left text-base font-semibold text-foreground border-b border-border"
+                    className="px-6 py-4 text-left text-sm font-semibold text-gray-900 border-b border-gray-200"
                     aria-label="Product status"
                   >
                     {translate("Status", language)}
                   </th>
                   <th
-                    className="px-6 py-4 text-right text-base font-semibold text-foreground border-b border-border"
+                    className="px-6 py-4 text-right text-sm font-semibold text-gray-900 border-b border-gray-200"
                     aria-label="Actions"
                   >
                     {translate("Actions", language)}
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="divide-y divide-gray-200">
                 {products.map((product) => (
-                  <tr key={product.id} className="hover:bg-muted/30 transition-colors">
+                  <tr key={product.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4" aria-label={`Product: ${product.name}`}>
                       {editId === product.id ? (
                         <Input
@@ -217,7 +225,7 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
                           aria-invalid={!!errorsEdit.name}
                         />
                       ) : (
-                        <span className="font-medium text-foreground">{translate(product.name, language)}</span>
+                        <span className="font-medium text-gray-900">{translate(product.name, language)}</span>
                       )}
                     </td>
                     <td className="px-6 py-4" aria-label={`Category: ${product.category || "None"}`}>
@@ -259,6 +267,7 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
                               resetEdit()
                               setEditId(null)
                               setEditingProduct(null)
+                              setEditingLogo(null)
                             }}
                             aria-label="Cancel editing"
                           >

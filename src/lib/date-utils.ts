@@ -2,10 +2,9 @@ import { format, subDays, parseISO, isValid, differenceInDays } from "date-fns"
 import { formatInTimeZone, toZonedTime, fromZonedTime } from "date-fns-tz"
 
 const TIMEZONE_SHANGHAI = 'Asia/Shanghai'
-const TIMEZONE_TOKYO = 'Asia/Tokyo'
 
 /**
- * 获取今天的日期（北京时间）
+ * 获取今天的日期（北京时间，统一时区）
  */
 export function getTodayShanghai(): Date {
   const now = new Date()
@@ -13,29 +12,14 @@ export function getTodayShanghai(): Date {
 }
 
 /**
- * 获取今天的日期（东京时间，保留兼容）
- */
-export function getTodayTokyo(): Date {
-  const now = new Date()
-  return toZonedTime(now, TIMEZONE_TOKYO)
-}
-
-/**
- * 格式化日期为 YYYY-MM-DD（北京时间）
+ * 格式化日期为 YYYY-MM-DD（北京时间，统一时区）
  */
 export function formatDateShanghai(date: Date): string {
   return formatInTimeZone(date, TIMEZONE_SHANGHAI, "yyyy-MM-dd")
 }
 
 /**
- * 格式化日期为 YYYY-MM-DD（东京时间，保留兼容）
- */
-export function formatDateTokyo(date: Date): string {
-  return formatInTimeZone(date, TIMEZONE_TOKYO, "yyyy-MM-dd")
-}
-
-/**
- * 解析日期字符串为 Date 对象（北京时间）
+ * 解析日期字符串为 Date 对象（北京时间，统一时区）
  */
 export function parseDateShanghai(dateStr: string): Date {
   const parsed = parseISO(dateStr)
@@ -48,17 +32,11 @@ export function parseDateShanghai(dateStr: string): Date {
 }
 
 /**
- * 解析日期字符串为 Date 对象（东京时间，保留兼容）
+ * 统一的日期格式化函数（默认使用Shanghai时区）
  */
-export function parseDateTokyo(dateStr: string): Date {
-  const parsed = parseISO(dateStr)
-  if (!isValid(parsed)) {
-    throw new Error(`Invalid date: ${dateStr}`)
-  }
-  // Convert date string to Date object in Tokyo timezone
-  const zonedDate = new Date(`${dateStr}T00:00:00`)
-  return fromZonedTime(zonedDate, TIMEZONE_TOKYO)
-}
+export const formatDate = formatDateShanghai
+export const parseDate = parseDateShanghai
+export const getToday = getTodayShanghai
 
 /**
  * 获取默认日期范围（最近7天，北京时间）

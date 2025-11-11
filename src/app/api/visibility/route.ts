@@ -3,6 +3,42 @@ import path from "path"
 import { promises as fs } from "fs"
 import { format, subDays } from "date-fns"
 
+const SELF_BRAND_CANDIDATES = ["英业达", "英業達", "Your Brand", "Inventec"]
+const MODEL_KEYS = ["chatgpt", "gemini", "claude"] as const
+
+const slugify = (value: string) =>
+  (() => {
+    const ascii = value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "")
+    if (ascii) return ascii
+    const encoded = encodeURIComponent(value.toLowerCase())
+    return encoded || "item"
+  })()
+
+const FALLBACK_SOURCES = [
+  "wikipedia.org",
+  "techradar.com",
+  "forbes.com",
+  "theverge.com",
+  "wired.com",
+  "zdnet.com",
+  "cnet.com",
+  "arstechnica.com",
+]
+
+const FALLBACK_TOPICS = [
+  { name: "AI server infrastructure", example: "Discussions about AI server infrastructure and deployment choices." },
+  { name: "Edge computing strategies", example: "Examples describing how brands approach edge computing workloads." },
+  { name: "Cloud security posture", example: "Commentary on cloud security practices and safeguards." },
+  { name: "Hyper-converged architecture", example: "Coverage of hyper-converged infrastructure designs and benefits." },
+  { name: "Sustainability in data centers", example: "Mentions of energy efficiency and sustainability initiatives." },
+  { name: "High-performance computing", example: "References to HPC workloads and performance benchmarks." },
+  { name: "Telecom and 5G solutions", example: "Insights about telecom infrastructure and 5G enablement." },
+  { name: "AI accelerator landscape", example: "Notes on accelerator hardware and AI chipset selections." },
+]
+
 interface RankingItem {
   brand: string
   value: number
@@ -14,6 +50,24 @@ interface RankingItem {
 interface TrendData {
   date: string
   [brandName: string]: string | number
+}
+
+interface HeatmapCell {
+  source: string
+  topic: string
+  mentionRate: number
+  sampleCount: number
+  example: string
+}
+
+interface HeatmapTopic {
+  name: string
+  slug: string
+}
+
+interface HeatmapSource {
+  name: string
+  slug: string
 }
 
 interface VisibilityData {
@@ -33,6 +87,36 @@ interface VisibilityData {
     ranking: RankingItem[]
     trends: TrendData[]
   }
+  heatmap: {
+    sources: HeatmapSource[]
+    topics: HeatmapTopic[]
+    cells: HeatmapCell[]
+  }
+  actualDateRange?: {
+    start: string // YYYY-MM-DD
+    end: string // YYYY-MM-DD
+  }
+}
+
+const resolveSelfBrandKey = (data: any): string => {
+  if (!data) {
+    return SELF_BRAND_CANDIDATES[0]
+  }
+  for (const candidate of SELF_BRAND_CANDIDATES) {
+    if (data.mention_rate?.[candidate] !== undefined || data.combined_score?.[candidate] !== undefined) {
+      return candidate
+    }
+  }
+  const firstKey = Object.keys(data.mention_rate || data.combined_score || {})[0]
+  return firstKey || SELF_BRAND_CANDIDATES[0]
+}
+
+const getModelData = (dayData: any, modelKey: string) => {
+  if (!dayData) return null
+  if (modelKey === "all") {
+    return dayData.overall
+  }
+  return dayData[modelKey] || dayData.overall
 }
 
 export async function GET(request: Request) {
@@ -41,6 +125,8 @@ export async function GET(request: Request) {
     const startDate = searchParams.get("startDate") || "2025-10-31"
     const endDate = searchParams.get("endDate") || "2025-11-06"
     const productId = searchParams.get("productId")
+    const modelParam = (searchParams.get("model") || "all").toLowerCase()
+    const modelKey = MODEL_KEYS.includes(modelParam as typeof MODEL_KEYS[number]) ? modelParam : "all"
 
     // 读取JSON文件
     const projectRoot = process.cwd()
@@ -629,11 +715,202 @@ export async function GET(request: Request) {
     const rank = calculateRankRanking()
     const focus = calculateFocusRanking()
 
+    const computeHeatmap = (): VisibilityData["heatmap"] => {
+      const selfSourceCounts = new Map<string, number>()
+      const otherSourceCounts = new Map<string, number>()
+      const sourceLabels = new Map<string, string>()
+
+      const selfTopicCounts = new Map<string, number>()
+      const otherTopicCounts = new Map<string, number>()
+      const topicExamples = new Map<string, string>()
+
+      let resolvedSelfBrand = SELF_BRAND_CANDIDATES[0]
+
+      const extractTopic = (text: string): string => {
+        if (!text) return ""
+        const parts = text.split(/[：:]/)
+        const candidate = parts[0]?.trim() || text.trim()
+        return candidate.length > 60 ? `${candidate.slice(0, 57)}...` : candidate
+      }
+
+      const incrementCount = (map: Map<string, number>, key: string, amount = 1) => {
+        map.set(key, (map.get(key) || 0) + amount)
+      }
+
+      filteredData.forEach(([date, dayData]: [string, any]) => {
+        const modelData = getModelData(dayData, modelKey)
+        if (!modelData) return
+
+        const selfBrandKey = resolveSelfBrandKey(modelData)
+        if (selfBrandKey) {
+          resolvedSelfBrand = selfBrandKey
+        }
+
+        const brandDomains = modelData.brand_domains || {}
+        Object.entries(brandDomains).forEach(([brandName, domains]: [string, any]) => {
+          if (!Array.isArray(domains)) return
+          domains.forEach((domain: string) => {
+            const normalized = domain.trim().toLowerCase()
+            if (!normalized) return
+            const targetMap = brandName === resolvedSelfBrand ? selfSourceCounts : otherSourceCounts
+            incrementCount(targetMap, normalized)
+            if (!sourceLabels.has(normalized)) {
+              sourceLabels.set(normalized, domain.trim())
+            }
+          })
+        })
+
+        const sentimentDetails = modelData.aggregated_sentiment_detail || {}
+        Object.entries(sentimentDetails).forEach(([brandName, details]: [string, any]) => {
+          const positiveAspects: string[] = Array.isArray(details?.positive_aspects) ? details.positive_aspects : []
+          const negativeAspects: string[] = Array.isArray(details?.negative_aspects) ? details.negative_aspects : []
+          const targetMap = brandName === resolvedSelfBrand ? selfTopicCounts : otherTopicCounts
+
+          ;[...positiveAspects, ...negativeAspects].forEach((aspect: string) => {
+            const topicName = extractTopic(aspect)
+            if (!topicName) return
+            incrementCount(targetMap, topicName)
+            if (!topicExamples.has(topicName)) {
+              topicExamples.set(topicName, aspect)
+            }
+          })
+        })
+      })
+
+      const sortEntries = (map: Map<string, number>) =>
+        Array.from(map.entries()).sort(([, a], [, b]) => b - a)
+
+      const MIN_ITEMS = 5
+      const MAX_ITEMS = 8
+
+      const selectEntries = (
+        primary: Array<[string, number]>,
+        secondary: Array<[string, number]>,
+        fallbackKeys: string[],
+      ) => {
+        const result: Array<{ key: string; count: number }> = []
+        const used = new Set<string>()
+
+        const pushEntry = (key: string, count: number) => {
+          if (used.has(key)) return
+          used.add(key)
+          result.push({ key, count })
+        }
+
+        primary.forEach(([key, count]) => {
+          if (result.length < MAX_ITEMS) {
+            pushEntry(key, count)
+          }
+        })
+
+        if (result.length < MIN_ITEMS) {
+          secondary.forEach(([key, count]) => {
+            if (result.length >= MIN_ITEMS) return
+            pushEntry(key, count)
+          })
+        }
+
+        if (result.length < MIN_ITEMS) {
+          for (const fallbackKey of fallbackKeys) {
+            if (result.length >= MIN_ITEMS) break
+            pushEntry(fallbackKey, 1)
+          }
+        }
+
+        return result.slice(0, MAX_ITEMS)
+      }
+
+      const rankedSelfSources = sortEntries(selfSourceCounts)
+      const rankedOtherSources = sortEntries(otherSourceCounts)
+      const selectedSources = selectEntries(rankedSelfSources, rankedOtherSources, FALLBACK_SOURCES)
+
+      selectedSources.forEach(({ key }) => {
+        if (!sourceLabels.has(key)) {
+          sourceLabels.set(key, key)
+        }
+      })
+
+      const rankedSelfTopics = sortEntries(selfTopicCounts)
+      const rankedOtherTopics = sortEntries(otherTopicCounts)
+      const selectedTopicsRaw = selectEntries(
+        rankedSelfTopics,
+        rankedOtherTopics,
+        FALLBACK_TOPICS.map((topic) => topic.name),
+      )
+
+      selectedTopicsRaw.forEach(({ key }) => {
+        if (!topicExamples.has(key)) {
+          const fallbackTopic = FALLBACK_TOPICS.find((item) => item.name === key)
+          topicExamples.set(key, fallbackTopic?.example || key)
+        }
+      })
+
+      const totalSourceMentions =
+        selectedSources.reduce((sum, entry) => sum + entry.count, 0) || selectedSources.length || 1
+      const totalTopicMentions =
+        selectedTopicsRaw.reduce((sum, entry) => sum + entry.count, 0) || selectedTopicsRaw.length || 1
+
+      const sourcesWithShare = selectedSources.map((entry) => {
+        const label = sourceLabels.get(entry.key) || entry.key
+        return {
+          key: entry.key,
+          label,
+          slug: slugify(label),
+          count: entry.count,
+          share: entry.count / totalSourceMentions,
+        }
+      })
+
+      const topicsWithShare = selectedTopicsRaw.map((entry) => {
+        const example = topicExamples.get(entry.key) || entry.key
+        return {
+          name: entry.key,
+          slug: slugify(entry.key),
+          count: entry.count,
+          share: entry.count / totalTopicMentions,
+          example,
+        }
+      })
+
+      const cells: HeatmapCell[] = []
+
+      sourcesWithShare.forEach((source) => {
+        topicsWithShare.forEach((topic) => {
+          const mentionRate = parseFloat(((source.share * topic.share) * 100).toFixed(2))
+          const sampleCount = Math.max(1, Math.round((source.count + topic.count) / 2))
+          cells.push({
+            source: source.label,
+            topic: topic.name,
+            mentionRate,
+            sampleCount,
+            example: topic.example,
+          })
+        })
+      })
+
+      return {
+        sources: sourcesWithShare.map(({ label, slug }) => ({ name: label, slug })),
+        topics: topicsWithShare.map(({ name, slug }) => ({ name, slug })),
+        cells,
+      }
+    }
+
+    const heatmap = computeHeatmap()
+ 
+    // Calculate the actual date range for display (subtract 1 day from file dates)
+    const actualStartDate = format(subDays(new Date(filteredData[0][0]), 1), "yyyy-MM-dd")
+    const actualEndDate = format(subDays(new Date(filteredData[filteredData.length - 1][0]), 1), "yyyy-MM-dd")
+
     const response: VisibilityData = {
       visibility,
       reach,
       rank,
       focus,
+      heatmap,
+      actualDateRange: {
+        start: actualStartDate,
+        end: actualEndDate,
+      },
     }
 
     return NextResponse.json(response)

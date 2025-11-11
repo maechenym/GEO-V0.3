@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { StepIndicator } from "./brand/StepIndicator"
+import { Logo } from "@/components/logo"
 
 /**
  * Onboarding 流程布局
@@ -16,10 +17,8 @@ import { StepIndicator } from "./brand/StepIndicator"
 export default function OnboardingLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   
-  // 根据路径确定当前步骤
+  // 根据路径确定当前步骤（现在只有一个步骤）
   const getCurrentStep = () => {
-    if (pathname?.includes("/brand")) return 1
-    if (pathname?.includes("/plan")) return 2
     return 1
   }
 
@@ -35,9 +34,10 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
             {/* Logo - 点击跳转到首页 */}
             <Link
               href="/"
-              className="mb-6 block px-3 py-2 text-xl font-bold text-primary hover:text-primary/80 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-md transition-colors"
+              className="mb-6 block px-3 py-2 flex items-center gap-2 text-xl font-bold text-primary hover:text-primary/80 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-md transition-colors"
             >
-              ximu
+              <Logo size={24} />
+              <span>ximu</span>
             </Link>
             
             {/* 步骤指示器 */}
@@ -53,48 +53,24 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
             <div className="px-4 pt-4 pb-2">
               <Link
                 href="/"
-                className="inline-block px-3 py-2 text-xl font-bold text-primary hover:text-primary/80 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-md transition-colors"
+                className="inline-flex items-center gap-2 px-3 py-2 text-xl font-bold text-primary hover:text-primary/80 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-md transition-colors"
               >
-                ximu
+                <Logo size={24} />
+                <span>ximu</span>
               </Link>
             </div>
             
             {/* 移动端横向步骤指示器 */}
             <div className="px-4 pb-4">
               <div className="flex items-center gap-2 overflow-x-auto pb-2">
-              {[1, 2].map((step) => {
-                const isActive = step === currentStep
-                const isCompleted = step < currentStep
-                const labels = ["Brand", "Plan"]
-                
-                return (
-                  <div key={step} className="flex items-center gap-2 flex-shrink-0">
-                    <div
-                      className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-sm font-medium transition-colors ${
-                        isActive || isCompleted
-                          ? "border-primary bg-primary text-white"
-                          : "border-muted bg-background text-muted-foreground"
-                      }`}
-                    >
-                      {isCompleted ? "✓" : step}
-                    </div>
-                    <span
-                      className={`text-sm font-medium whitespace-nowrap ${
-                        isActive ? "text-primary" : "text-muted-foreground"
-                      }`}
-                    >
-                      {labels[step - 1]}
-                    </span>
-                    {step < 2 && (
-                      <div
-                        className={`h-0.5 w-8 transition-colors ${
-                          step < currentStep ? "bg-primary" : "bg-muted"
-                        }`}
-                      />
-                    )}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 text-sm font-medium transition-colors border-primary bg-primary text-white">
+                    1
                   </div>
-                )
-              })}
+                  <span className="text-sm font-medium whitespace-nowrap text-primary">
+                    Brand
+                  </span>
+                </div>
               </div>
             </div>
           </div>

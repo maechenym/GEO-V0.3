@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react"
 import { motion } from "framer-motion"
-import { Download, Calendar, ExternalLink, Copy, ChevronDown, ChevronUp, MoreVertical, ChevronLeft, ChevronRight, HelpCircle } from "lucide-react"
+import { ExternalLink, Copy, ChevronDown, ChevronUp, MoreVertical, ChevronLeft, ChevronRight, HelpCircle } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -19,41 +19,51 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { PageHeaderFilterBar } from "@/components/filters/PageHeaderFilterBar"
 import { FadeUp } from "@/lib/animations"
+import { mockSourceRows, simulateLoad } from "@/mocks/sources"
 import {
-  mockSourceKpis,
-  mockSourceRows,
-  simulateLoad,
-} from "@/mocks/sources"
-import { CalendarIconButton } from "@/components/overview/CalendarIconButton"
-import {
-  formatDateTokyo,
-  parseDateTokyo,
+  formatDateShanghai,
+  parseDateShanghai,
   getDefaultDateRange,
   getUserRegisteredAt,
   getDateRangeDays,
-  getTodayTokyo,
+  getTodayShanghai,
 } from "@/lib/date-utils"
-import { subDays } from "date-fns"
+import { subDays, differenceInDays } from "date-fns"
 import { useBrandUIStore } from "@/store/brand-ui.store"
 import { useLanguageStore } from "@/store/language.store"
-import { getTooltipContent } from "@/lib/i18n"
+import { getTooltipContent, translate } from "@/lib/i18n"
+import { exportToCSV, exportToPDF } from "@/lib/export-utils"
 import type { SourceFilters } from "@/types/sources"
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, Cell, LabelList } from "recharts"
+import { MODEL_OPTIONS } from "@/constants/models"
+import type { ModelOptionValue } from "@/constants/models"
+import { useSearchParams } from "next/navigation"
+
+type RangeKey = "1d" | "7d" | "14d" | "30d"
 
 export default function SourcesPage() {
   const { selectedBrandId, selectedProductId } = useBrandUIStore()
   const { language } = useLanguageStore()
+  const searchParams = useSearchParams()
+
+  // Initialize model from URL or default to "all"
+  const [selectedModel, setSelectedModel] = useState<ModelOptionValue>(
+    (searchParams.get("model") as ModelOptionValue) || "all"
+  )
 
   // Time range state
   const [dateRange, setDateRange] = useState(getDefaultDateRange())
+  const [isExporting, setIsExporting] = useState(false)
   const minDate = useMemo(() => getUserRegisteredAt(30), [])
-  const maxDate = useMemo(() => getTodayTokyo(), [])
+  const maxDate = useMemo(() => getTodayShanghai(), [])
 
   // Filters state
   const [filters, setFilters] = useState<SourceFilters>({
     timeRange: { 
-      start: formatDateTokyo(dateRange.start), 
-      end: formatDateTokyo(dateRange.end) 
+      start: formatDateShanghai(dateRange.start), 
+      end: formatDateShanghai(dateRange.end) 
     },
     brandId: selectedBrandId || undefined,
     productId: selectedProductId || undefined,
@@ -61,6 +71,7 @@ export default function SourcesPage() {
     granularity: "day",
     category: undefined,
     platform: undefined,
+    model: selectedModel,
   })
   
   // Handle date range change
@@ -70,39 +81,22 @@ export default function SourcesPage() {
     setFilters((prev) => ({
       ...prev,
       timeRange: {
-        start: formatDateTokyo(start),
-        end: formatDateTokyo(end),
+        start: formatDateShanghai(start),
+        end: formatDateShanghai(end),
       },
     }))
   }
-  
-  // Handle quick date range selection
-  const handleQuickRange = (days: number) => {
-    const end = getTodayTokyo()
-    const start = days === 1 ? end : subDays(end, days - 1)
-    handleDateRangeChange(start, end)
+
+  // Handle model change
+  const handleModelChange = (model: ModelOptionValue) => {
+    setSelectedModel(model)
+    setFilters((prev) => ({
+      ...prev,
+      model: model,
+    }))
   }
-  
-  // Handle 1 day selection (yesterday)
-  const handleOneDay = () => {
-    const yesterday = subDays(getTodayTokyo(), 1)
-    handleDateRangeChange(yesterday, yesterday)
-  }
-  
-  // Get period days
-  const periodDays = getDateRangeDays(dateRange.start, dateRange.end)
-  
-  // Time range button state (derived from dateRange)
-  const timeRange = useMemo(() => {
-    if (periodDays === 1) return "1d"
-    if (periodDays === 7) return "7d"
-    if (periodDays === 14) return "14d"
-    if (periodDays === 30) return "30d"
-    return "custom"
-  }, [periodDays])
 
   // Data state
-  const [kpis, setKpis] = useState<typeof mockSourceKpis | null>(null)
   const [sourceRows, setSourceRows] = useState<typeof mockSourceRows | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
@@ -177,37 +171,66 @@ export default function SourcesPage() {
   useEffect(() => {
     setLoading(true)
     setError(null)
-    Promise.all([
-      simulateLoad(mockSourceKpis, 400),
-      simulateLoad(mockSourceRows, 600),
-    ])
-      .then(([k, s]) => {
-        setKpis(k)
-        setSourceRows(s)
+    simulateLoad(mockSourceRows, 600)
+      .then((rows) => {
+        setSourceRows(rows)
       })
       .catch((e) => setError(e))
       .finally(() => setLoading(false))
   }, [])
 
-  const handleReset = () => {
-    const defaultRange = getDefaultDateRange()
-    setDateRange(defaultRange)
-    setFilters({
-      timeRange: { 
-        start: formatDateTokyo(defaultRange.start), 
-        end: formatDateTokyo(defaultRange.end) 
-      },
-      brandId: selectedBrandId || undefined,
-      productId: selectedProductId || undefined,
-      competitorIds: [],
-      granularity: "day",
-      category: undefined,
-      platform: undefined,
-    })
+  // Export functions
+  const handleExportCSV = () => {
+    if (!sourceRows || isExporting) return
+    setIsExporting(true)
+    
+    try {
+      const csvData = sourceRows.map((source) => ({
+        Source: source.url,
+        Type: source.type,
+        "Citation Rate": `${source.share.toFixed(1)}%`,
+        Mentioned: source.mentioned ? "Yes" : "No",
+        Mentions: source.mentions.join("; "),
+      }))
+      
+      exportToCSV(
+        csvData,
+        `sources_${formatDateShanghai(dateRange.start)}_${formatDateShanghai(dateRange.end)}.csv`
+      )
+    } catch (error) {
+      console.error("Error exporting CSV:", error)
+    } finally {
+      setIsExporting(false)
+    }
   }
 
-  const handleExport = () => {
-    console.log("Export", sourceRows?.length || 0)
+  const handleExportPDF = () => {
+    if (!sourceRows || isExporting) return
+    setIsExporting(true)
+    
+    try {
+      let content = `<table>
+        <tr><th>Source</th><th>Type</th><th>Citation Rate</th><th>Mentioned</th><th>Mentions</th></tr>`
+      
+      sourceRows.forEach((source) => {
+        const mentions = source.mentions.join(", ")
+        content += `<tr>
+          <td>${source.url}</td>
+          <td>${source.type}</td>
+          <td>${source.share.toFixed(1)}%</td>
+          <td>${source.mentioned ? "Yes" : "No"}</td>
+          <td>${mentions || "--"}</td>
+        </tr>`
+      })
+      
+      content += `</table>`
+      
+      exportToPDF("Sources Analysis Report", content)
+    } catch (error) {
+      console.error("Error exporting PDF:", error)
+    } finally {
+      setIsExporting(false)
+    }
   }
 
   const handleCopyUrl = (url: string) => {
@@ -244,81 +267,51 @@ export default function SourcesPage() {
     })
   }
 
+  const sourceColorPalette = ["#2563EB", "#0000D2", "#38BDF8", "#6366F1", "#22C55E", "#D946EF", "#F97316"] // Keep original palette for chart variety
+
+  const topSourceDistribution = useMemo(() => {
+    if (!sourceRows) return []
+    return [...sourceRows]
+      .sort((a, b) => b.share - a.share)
+      .slice(0, 6)
+      .map((row, index) => ({
+        id: row.id,
+        type: row.type,
+        share: Math.max(0, Math.min(100, row.share)),
+        brandShare: Math.max(0, Math.min(100, row.mentionRate ?? 0)),
+        mentioned: row.mentioned,
+        palette: sourceColorPalette[index % sourceColorPalette.length],
+      }))
+  }, [sourceRows])
+
   return (
     <TooltipProvider>
       <div className="bg-background -mx-6">
-        {/* Top Filter Bar */}
-        <div className="sticky top-0 z-50 bg-white border-b border-border px-6 py-2">
-          <div className="container mx-auto max-w-[1600px]">
-            <div className="flex items-center justify-between">
-              {/* Left: Title */}
-              <div className="-ml-6">
-                <h1 className="text-xl font-semibold text-foreground">Source Analysis</h1>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Analyze brand mention frequency and source distribution in AI answers
-                </p>
-              </div>
-
-              {/* Right: Filters */}
-              <div className="flex items-center gap-3">
-                {/* Time Range Selector */}
-                <div className="flex items-center gap-2 border-r border-border pr-3">
-                  <Button
-                    variant={timeRange === "1d" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleOneDay()}
-                    className="h-8 text-xs"
-                  >
-                    1 day
-                  </Button>
-                  <Button
-                    variant={timeRange === "7d" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleQuickRange(7)}
-                    className="h-8 text-xs"
-                  >
-                    7 days
-                  </Button>
-                  <Button
-                    variant={timeRange === "14d" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleQuickRange(14)}
-                    className="h-8 text-xs"
-                  >
-                    14 days
-                  </Button>
-                  <Button
-                    variant={timeRange === "30d" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleQuickRange(30)}
-                    className="h-8 text-xs"
-                  >
-                    30 days
-                  </Button>
-                  <CalendarIconButton
-                    startDate={dateRange.start}
-                    endDate={dateRange.end}
-                    onDateChange={handleDateRangeChange}
-                    minDate={minDate}
-                    maxDate={maxDate}
-                  />
-                </div>
-
-                {/* Export Button */}
-                <Button variant="outline" size="sm" className="h-8 text-xs" onClick={handleExport}>
-                  <Download className="h-3 w-3 mr-1.5" />
-                  Export
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <PageHeaderFilterBar
+          title={language === "zh-TW" ? "來源分析" : "Source Analysis"}
+          description={
+            language === "zh-TW"
+              ? "分析 AI 回答中的品牌提及頻率和來源分佈"
+              : "Analyze brand mention frequency and source distribution in AI answers"
+          }
+          startDate={dateRange.start}
+          endDate={dateRange.end}
+          onDateChange={handleDateRangeChange}
+          minDate={minDate}
+          maxDate={maxDate}
+          selectedModel={selectedModel}
+          onModelChange={handleModelChange}
+          showModelSelector={true}
+          onExportCSV={handleExportCSV}
+          onExportPDF={handleExportPDF}
+          isExporting={isExporting}
+        />
 
         {/* Main Content */}
-        <div className="container mx-auto pl-4 pr-4 pt-4 pb-10 max-w-[1600px]">
-          <div className="space-y-6">
+        <div className="container mx-auto px-4 sm:px-pageX py-4 sm:py-pageY max-w-[1600px]">
+          <div className="space-y-4 sm:space-y-6">
             {/* Top Source Table */}
-            <FadeUp delay={0.1}>
+            <FadeUp delay={0.12}>
               <Card className="rounded-2xl shadow-sm">
                 <CardHeader>
                   <CardTitle className="text-lg font-semibold flex items-center gap-2">
@@ -361,16 +354,16 @@ export default function SourcesPage() {
                           <col className="w-[20%]" />
                         </colgroup>
                         <thead>
-                          <tr className="border-b border-border">
-                            <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">
+                          <tr className="border-b border-ink-200 bg-ink-50/50">
+                            <th className="text-left py-3 px-4 text-xs font-semibold text-ink-700">
                               Source
                             </th>
-                            <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">
+                            <th className="text-left py-3 px-4 text-xs font-semibold text-ink-700">
                               <div className="flex items-center gap-2">
                                 <span>Type</span>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <button className="text-muted-foreground hover:text-foreground transition-colors">
+                                    <button className="text-ink-400 hover:text-ink-600 transition-colors">
                                       <HelpCircle className="h-3 w-3" />
                                     </button>
                                   </TooltipTrigger>
@@ -393,25 +386,25 @@ export default function SourcesPage() {
                                 </Select>
                               </div>
                             </th>
-                            <th className="text-center py-3 px-4 text-xs font-medium text-muted-foreground">
+                            <th className="text-center py-3 px-4 text-xs font-semibold text-ink-700">
                               <div className="flex items-center justify-center gap-1">
                                 <button
                                   onClick={handleCitationRateSort}
-                                  className="flex items-center justify-center gap-1 hover:text-foreground transition-colors group"
+                                  className="flex items-center justify-center gap-1 hover:text-ink-900 transition-colors group"
                                 >
                                   <span>Citation Rate</span>
                                   <div className="flex flex-col">
                                     <ChevronUp 
-                                      className={`h-3 w-3 transition-colors ${sortOrder === "desc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
+                                      className={`h-3 w-3 transition-colors ${sortOrder === "desc" ? "text-brand-600" : "text-ink-300 group-hover:text-ink-400"}`} 
                                     />
                                     <ChevronDown 
-                                      className={`h-3 w-3 -mt-1 transition-colors ${sortOrder === "asc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
+                                      className={`h-3 w-3 -mt-1 transition-colors ${sortOrder === "asc" ? "text-brand-600" : "text-ink-300 group-hover:text-ink-400"}`} 
                                     />
                                   </div>
                                 </button>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <button className="text-muted-foreground hover:text-foreground transition-colors">
+                                    <button className="text-ink-400 hover:text-ink-600 transition-colors">
                                       <HelpCircle className="h-3 w-3" />
                                     </button>
                                   </TooltipTrigger>
@@ -421,12 +414,12 @@ export default function SourcesPage() {
                                 </Tooltip>
                               </div>
                             </th>
-                            <th className="text-center py-3 px-4 text-xs font-medium text-muted-foreground">
+                            <th className="text-center py-3 px-4 text-xs font-semibold text-ink-700">
                               <div className="flex items-center justify-center gap-2">
                                 <span>Mentioned</span>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <button className="text-muted-foreground hover:text-foreground transition-colors">
+                                    <button className="text-ink-400 hover:text-ink-600 transition-colors">
                                       <HelpCircle className="h-3 w-3" />
                                     </button>
                                   </TooltipTrigger>
@@ -446,12 +439,12 @@ export default function SourcesPage() {
                                 </Select>
                               </div>
                             </th>
-                            <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground">
+                            <th className="text-right py-3 px-4 text-xs font-semibold text-ink-700">
                               <div className="flex items-center justify-end gap-2">
                                 <span>Mentions</span>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <button className="text-muted-foreground hover:text-foreground transition-colors">
+                                    <button className="text-ink-400 hover:text-ink-600 transition-colors">
                                       <HelpCircle className="h-3 w-3" />
                                     </button>
                                   </TooltipTrigger>
@@ -463,7 +456,7 @@ export default function SourcesPage() {
                             </th>
                           </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-ink-100">
                           {paginatedRows?.map((source) => {
                             const isExpanded = expandedMentions.has(source.id)
                             const firstMention = source.mentions[0] || ""
@@ -472,14 +465,14 @@ export default function SourcesPage() {
                             return (
                               <tr
                                 key={source.id}
-                                className="border-b border-border hover:bg-accent/50 transition-colors"
+                                className="border-b border-ink-100 hover:bg-ink-50 transition-colors"
                               >
-                                <td className="py-3 px-4">
+                                <td className="py-3 px-4 text-sm text-ink-900">
                                   <div className="flex items-center gap-2">
                                     <span className="text-sm font-medium">{source.url}</span>
                                     <button
                                       onClick={() => handleCopyUrl(source.url)}
-                                      className="text-muted-foreground hover:text-foreground transition-colors"
+                                      className="text-ink-400 hover:text-ink-600 transition-colors"
                                     >
                                       <Copy className="h-3 w-3" />
                                     </button>
@@ -487,13 +480,13 @@ export default function SourcesPage() {
                                       href={`https://${source.url}`}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="text-muted-foreground hover:text-foreground transition-colors"
+                                      className="text-ink-400 hover:text-ink-600 transition-colors"
                                     >
                                       <ExternalLink className="h-3 w-3" />
                                     </a>
                                   </div>
                                 </td>
-                                <td className="py-3 px-4">
+                                <td className="py-3 px-4 text-sm text-ink-900">
                                   <Badge
                                     variant="outline"
                                     className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-400"
@@ -533,7 +526,7 @@ export default function SourcesPage() {
                                                 ))}
                                                 <button
                                                   onClick={() => toggleMentionsExpansion(source.id)}
-                                                  className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 mt-1"
+                                                  className="text-xs text-ink-500 hover:text-ink-700 transition-colors flex items-center gap-1 mt-1"
                                                 >
                                                   <ChevronUp className="h-3 w-3" />
                                                   Less
@@ -542,7 +535,7 @@ export default function SourcesPage() {
                                             ) : (
                                               <button
                                                 onClick={() => toggleMentionsExpansion(source.id)}
-                                                className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                                                className="text-xs text-ink-500 hover:text-ink-700 transition-colors flex items-center gap-1"
                                               >
                                                 <MoreVertical className="h-3 w-3" />
                                                 More ({remainingMentions.length})
@@ -552,7 +545,7 @@ export default function SourcesPage() {
                                         )}
                                       </>
                                     ) : (
-                                      <span className="text-sm text-muted-foreground">--</span>
+                                      <span className="text-sm text-ink-400">--</span>
                                     )}
                                   </div>
                                 </td>
@@ -607,6 +600,81 @@ export default function SourcesPage() {
                 </CardContent>
               </Card>
             </FadeUp>
+
+            {!loading && !error && topSourceDistribution.length > 0 && (
+              <FadeUp delay={0.18}>
+                <Card className="rounded-2xl shadow-sm">
+                  <CardHeader>
+                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                      {translate("Sources Distribution", language)}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button className="text-muted-foreground hover:text-foreground transition-colors">
+                            <HelpCircle className="h-4 w-4" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{getTooltipContent("Sources Distribution", language)}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-5">
+                      {topSourceDistribution.map((source) => {
+                        const primaryValue = source.share
+                        const secondaryValue = source.brandShare
+
+                        return (
+                          <div key={source.id} className="space-y-3">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="text-sm font-semibold text-ink-900">
+                                {translate(source.type, language)}
+                              </div>
+                              <div className="text-xs font-medium text-ink-600 text-right">
+                                <span className="text-ink-900">{primaryValue.toFixed(0)}%</span>
+                                <span className="mx-1 text-ink-400">vs</span>
+                                <span className="text-ink-500">{secondaryValue.toFixed(0)}%</span>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between text-2xs text-ink-500">
+                                <span className="inline-flex items-center gap-2">
+                                  <span
+                                    className="inline-flex h-2 w-2 rounded-full"
+                                    style={{ backgroundColor: source.palette }}
+                                  />
+                                  {language === "zh-TW" ? "所有引用" : "Total mentions"}
+                                </span>
+                                <span className="inline-flex items-center gap-2">
+                                  {language === "zh-TW" ? "提及品牌" : "Mentions brand"}
+                                  <span className="inline-flex h-2 w-2 rounded-full bg-ink-400/60" />
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 items-center">
+                                <div className="relative h-2 rounded-full bg-ink-200 overflow-hidden">
+                                  <div
+                                    className="absolute left-0 top-0 h-full rounded-full transition-all"
+                                    style={{ width: `${primaryValue}%`, backgroundColor: source.palette }}
+                                  />
+                                </div>
+                                <div className="relative h-2 rounded-full bg-ink-100 overflow-hidden">
+                                  <div
+                                    className="absolute right-0 top-0 h-full rounded-full bg-ink-400/60 transition-all"
+                                    style={{ width: `${Math.min(secondaryValue, 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              </FadeUp>
+            )}
           </div>
         </div>
       </div>

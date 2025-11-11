@@ -2,7 +2,145 @@ import { NextResponse } from "next/server"
 import path from "path"
 import { promises as fs } from "fs"
 import { format, subDays } from "date-fns"
-import type { OverviewData, OverviewKPI, CompetitorRanking, BrandInfluenceData } from "@/types/overview"
+import type {
+  OverviewData,
+  OverviewKPI,
+  CompetitorRanking,
+  BrandInfluenceData,
+  OverviewSource,
+  OverviewTopic,
+} from "@/types/overview"
+
+const MODEL_KEY_MAP: Record<string, string> = {
+  all: "overall",
+  gpt: "chatgpt",
+  gemini: "gemini",
+  claude: "claude",
+}
+
+const SELF_BRAND_CANDIDATES = ["英业达", "英業達", "Your Brand", "Inventec"]
+
+const getModelKey = (modelParam: string | null): string => {
+  if (!modelParam) return "overall"
+  const normalized = modelParam.toLowerCase()
+  return MODEL_KEY_MAP[normalized] || "overall"
+}
+
+const resolveSelfBrandKey = (source: any): string => {
+  if (!source || typeof source !== "object") {
+    return SELF_BRAND_CANDIDATES[0]
+  }
+  const mentionRateKeys = Object.keys(source.mention_rate || {})
+  for (const candidate of SELF_BRAND_CANDIDATES) {
+    if (mentionRateKeys.includes(candidate)) {
+      return candidate
+    }
+  }
+  return SELF_BRAND_CANDIDATES[0]
+}
+
+const getModelData = (dayData: any, modelKey: string): any => {
+  if (!dayData || typeof dayData !== "object") return null
+  const modelData = dayData?.[modelKey]
+  if (modelData && typeof modelData === "object" && Object.keys(modelData).length > 0) {
+    return modelData
+  }
+  return dayData?.overall || null
+}
+
+const computeTopSources = (
+  filteredData: Array<[string, any]>,
+  modelKey: string,
+  fallbackModelKey: string,
+  selfBrandKey: string
+): OverviewSource[] => {
+  const domainMap = new Map<
+    string,
+    {
+      domain: string
+      mentionCount: number
+      mentionsSelf: boolean
+    }
+  >()
+  let totalMentions = 0
+
+  filteredData.forEach(([_, day]) => {
+    const modelData = day?.[modelKey] ?? day?.[fallbackModelKey] ?? day?.overall
+    const brandDomains = modelData?.brand_domains as Record<string, string[] | undefined>
+    if (!brandDomains) return
+
+    Object.entries(brandDomains).forEach(([brand, domains]) => {
+      if (!Array.isArray(domains)) return
+      domains.forEach((rawDomain) => {
+        if (!rawDomain || typeof rawDomain !== "string") return
+        const trimmedDomain = rawDomain.trim()
+        if (!trimmedDomain) return
+        const key = trimmedDomain.toLowerCase()
+        const existing = domainMap.get(key)
+        if (existing) {
+          existing.mentionCount += 1
+          if (brand === selfBrandKey) {
+            existing.mentionsSelf = true
+          }
+        } else {
+          domainMap.set(key, {
+            domain: trimmedDomain,
+            mentionCount: 1,
+            mentionsSelf: brand === selfBrandKey,
+          })
+        }
+        totalMentions += 1
+      })
+    })
+  })
+
+  const ranked = Array.from(domainMap.values())
+    .sort((a, b) => b.mentionCount - a.mentionCount)
+    .slice(0, 5)
+
+  return ranked.map((item) => ({
+    domain: item.domain,
+    mentionCount: item.mentionCount,
+    mentionShare: totalMentions > 0 ? item.mentionCount / totalMentions : 0,
+    mentionsSelf: item.mentionsSelf,
+  }))
+}
+
+const computeTopTopics = (
+  filteredData: Array<[string, any]>,
+  modelKey: string,
+  fallbackModelKey: string,
+  selfBrandKey: string
+): OverviewTopic[] => {
+  const topicMap = new Map<string, number>()
+
+  filteredData.forEach(([_, day]) => {
+    const modelData = day?.[modelKey] ?? day?.[fallbackModelKey] ?? day?.overall
+    const aggregated = modelData?.aggregated_sentiment_detail?.[selfBrandKey]
+    if (!aggregated) return
+
+    const positiveAspects = Array.isArray(aggregated.positive_aspects) ? aggregated.positive_aspects : []
+    const negativeAspects = Array.isArray(aggregated.negative_aspects) ? aggregated.negative_aspects : []
+
+    ;[...positiveAspects, ...negativeAspects].forEach((aspect) => {
+      if (!aspect || typeof aspect !== "string") return
+      const trimmed = aspect.trim()
+      if (!trimmed) return
+      topicMap.set(trimmed, (topicMap.get(trimmed) || 0) + 1)
+    })
+  })
+
+  const totalMentions = Array.from(topicMap.values()).reduce((sum, count) => sum + count, 0)
+
+  return Array.from(topicMap.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([topic, count]) => ({
+      topic,
+      mentionCount: count,
+      mentionShare: totalMentions > 0 ? count / totalMentions : 0,
+    }))
+}
 
 export async function GET(request: Request) {
   try {
@@ -10,6 +148,9 @@ export async function GET(request: Request) {
     const startDate = searchParams.get("startDate") || "2025-10-31"
     const endDate = searchParams.get("endDate") || "2025-11-06"
     const productId = searchParams.get("productId")
+    const brandId = searchParams.get("brandId")
+    const modelParam = searchParams.get("model")
+    const modelKey = getModelKey(modelParam)
 
     // 读取JSON文件
     const projectRoot = process.cwd()
@@ -111,7 +252,10 @@ export async function GET(request: Request) {
 
     // 过滤日期范围
     console.log(`[Overview API] Filtering data - startDate: ${startDate}, endDate: ${endDate}`)
-    console.log(`[Overview API] Available dates in data:`, productData.map(([date]: [string, any]) => date))
+    const availableDates = productData.map(([date]: [string, any]) => date)
+    console.log(`[Overview API] Available dates in data:`, availableDates)
+    console.log(`[Overview API] Date range check - startDate: ${startDate}, endDate: ${endDate}`)
+    console.log(`[Overview API] Min available date: ${availableDates[0]}, Max available date: ${availableDates[availableDates.length - 1]}`)
     
     const filteredData = productData.filter(([date]: [string, any]) => {
       return date >= startDate && date <= endDate
@@ -121,8 +265,10 @@ export async function GET(request: Request) {
     console.log(`[Overview API] Filtered data count: ${filteredData.length}`)
 
     if (filteredData.length === 0) {
+      console.error(`[Overview API] No data found for date range ${startDate} to ${endDate}`)
+      console.error(`[Overview API] Available date range: ${availableDates[0]} to ${availableDates[availableDates.length - 1]}`)
       return NextResponse.json(
-        { error: "No data for date range" },
+        { error: `No data for date range ${startDate} to ${endDate}. Available range: ${availableDates[0]} to ${availableDates[availableDates.length - 1]}` },
         { status: 404 }
       )
     }
@@ -136,6 +282,7 @@ export async function GET(request: Request) {
     console.log(`[Overview API] Processing data for date range: ${startDate} to ${endDate}, days: ${dateRangeDays}, isOneDayRange: ${isOneDayRange}`)
     
     let overall: any
+    let selfBrandKey = SELF_BRAND_CANDIDATES[0]
     let reach: number
     let inventecRank: number
     let inventecFocus: number
@@ -145,23 +292,24 @@ export async function GET(request: Request) {
     if (isOneDayRange) {
       // 1day范围：使用最后一天的数据
       const latestData = filteredData[filteredData.length - 1][1]
-      overall = latestData.overall
+      overall = getModelData(latestData, modelKey)
       
       if (!overall) {
-        console.error("[Overview API] overall data not found in latest data")
+        console.error(`[Overview API] ${modelKey} data not found in latest data`)
         return NextResponse.json(
-          { error: "Invalid data structure: missing overall" },
+          { error: "Invalid data structure: missing overview dataset for selected model" },
           { status: 500 }
         )
       }
+      selfBrandKey = resolveSelfBrandKey(overall)
       
       // Reach: 英业达的mention_rate（转换为百分比）
-      const inventecMentionRate = overall.mention_rate?.["英业达"] || 0
+      const inventecMentionRate = overall.mention_rate?.[selfBrandKey] || 0
       reach = inventecMentionRate * 100
 
       // Rank: 英业达的absolute_rank
       let rankValue: number = 1
-      const absoluteRankRaw = overall.absolute_rank?.["英业达"]
+      const absoluteRankRaw = overall.absolute_rank?.[selfBrandKey]
       
       if (typeof absoluteRankRaw === 'string') {
         const match = absoluteRankRaw.match(/^([\d.]+)/)
@@ -175,13 +323,13 @@ export async function GET(request: Request) {
       inventecRank = rankValue
 
       // Focus: 英业达的content_share
-      inventecFocus = (overall.content_share?.["英业达"] || 0) * 100
+      inventecFocus = (overall.content_share?.[selfBrandKey] || 0) * 100
 
       // Sentiment: 英业达的sentiment_score
-      inventecSentiment = overall.sentiment_score?.["英业达"] || 0
+      inventecSentiment = overall.sentiment_score?.[selfBrandKey] || 0
 
       // Visibility: 英业达的combined_score (转换为百分比)
-      inventecVisibility = (overall.combined_score?.["英业达"] || 0) * 100
+      inventecVisibility = (overall.combined_score?.[selfBrandKey] || 0) * 100
       
       console.log(`[Overview API] 1day mode - Using latest day data - Reach: ${reach}, Rank: ${inventecRank}, Focus: ${inventecFocus}, Sentiment: ${inventecSentiment}, Visibility: ${inventecVisibility}`)
     } else {
@@ -192,20 +340,33 @@ export async function GET(request: Request) {
       const allSentiments: number[] = []
       const allVisibilities: number[] = []
       
+      const latestData = filteredData[filteredData.length - 1][1]
+      overall = getModelData(latestData, modelKey)
+      
+      if (!overall) {
+        console.error(`[Overview API] ${modelKey} data not found in latest data for multi-day range`)
+        return NextResponse.json(
+          { error: "Invalid data structure: missing overview dataset for selected model" },
+          { status: 500 }
+        )
+      }
+      
+      selfBrandKey = resolveSelfBrandKey(overall)
+
       filteredData.forEach(([date, data]: [string, any]) => {
-        const dayOverall = data.overall
+        const dayOverall = getModelData(data, modelKey)
         if (!dayOverall) return
         
         // Reach: 收集每天的mention_rate（英业达的）
-        const inventecMentionRate = dayOverall.mention_rate?.["英业达"] || 0
+        const inventecMentionRate = dayOverall.mention_rate?.[selfBrandKey] || 0
         if (inventecMentionRate > 0) {
           allMentionRates.push(inventecMentionRate)
         }
         
         // Rank: 收集每天的rank
-        if (dayOverall.absolute_rank?.["英业达"] !== undefined && dayOverall.absolute_rank?.["英业达"] !== null) {
+        if (dayOverall.absolute_rank?.[selfBrandKey] !== undefined && dayOverall.absolute_rank?.[selfBrandKey] !== null) {
           let dayRankValue: number = 1
-          const absoluteRankRaw = dayOverall.absolute_rank["英业达"]
+          const absoluteRankRaw = dayOverall.absolute_rank[selfBrandKey]
           
           if (typeof absoluteRankRaw === 'string') {
             const match = absoluteRankRaw.match(/^([\d.]+)/)
@@ -222,15 +383,15 @@ export async function GET(request: Request) {
         }
         
         // Focus: 收集每天的content_share
-        const dayFocus = dayOverall.content_share?.["英业达"] || 0
+        const dayFocus = dayOverall.content_share?.[selfBrandKey] || 0
         allFocuses.push(dayFocus)
         
         // Sentiment: 收集每天的sentiment_score
-        const daySentiment = dayOverall.sentiment_score?.["英业达"] || 0
+        const daySentiment = dayOverall.sentiment_score?.[selfBrandKey] || 0
         allSentiments.push(daySentiment)
         
         // Visibility: 收集每天的combined_score
-        const dayVisibility = dayOverall.combined_score?.["英业达"] || 0
+        const dayVisibility = dayOverall.combined_score?.[selfBrandKey] || 0
         allVisibilities.push(dayVisibility)
       })
       
@@ -256,19 +417,12 @@ export async function GET(request: Request) {
         : 0
       
       // 使用最后一天的数据作为overall（用于后续的竞品排名等）
-      const latestData = filteredData[filteredData.length - 1][1]
-      overall = latestData.overall
-      
-      if (!overall) {
-        console.error("[Overview API] overall data not found in latest data for multi-day range")
-        return NextResponse.json(
-          { error: "Invalid data structure: missing overall" },
-          { status: 500 }
-        )
-      }
-      
       console.log(`[Overview API] 7day mode - Calculated averages from ${filteredData.length} days - Reach: ${reach.toFixed(2)}, Rank: ${inventecRank}, Focus: ${inventecFocus.toFixed(2)}, Sentiment: ${inventecSentiment.toFixed(2)}, Visibility: ${inventecVisibility.toFixed(2)}`)
     }
+
+    console.log(
+      `[Overview API] Using selfBrandKey: ${selfBrandKey}, modelKey: ${modelKey}, brandId: ${brandId ?? "default"}`
+    )
 
     // 计算changeRate（根据日期范围类型）
     let previousPeriodData: any = null
@@ -281,7 +435,7 @@ export async function GET(request: Request) {
       if (filteredData.length >= 2) {
         const yesterdayEntry = filteredData[0]
         if (yesterdayEntry) {
-          previousPeriodData = yesterdayEntry[1]?.overall
+          previousPeriodData = getModelData(yesterdayEntry[1], modelKey)
           console.log(`[Overview API] 1day mode - Using yesterday data for comparison: ${yesterdayEntry[0]}`)
         }
       } else if (filteredData.length === 1) {
@@ -291,7 +445,7 @@ export async function GET(request: Request) {
         const previousDate = format(currentDateObj, "yyyy-MM-dd")
         const previousDayEntry = productData.find(([date]: [string, any]) => date === previousDate)
         if (previousDayEntry) {
-          previousPeriodData = previousDayEntry[1]?.overall
+          previousPeriodData = getModelData(previousDayEntry[1], modelKey)
           console.log(`[Overview API] 1day mode - Only one day found, using previous day for comparison: ${previousDate}`)
         }
       }
@@ -304,7 +458,7 @@ export async function GET(request: Request) {
         const previousDate = format(firstDateObj, "yyyy-MM-dd")
         const previousDayEntry = productData.find(([date]: [string, any]) => date === previousDate)
         if (previousDayEntry) {
-          previousPeriodData = previousDayEntry[1]?.overall
+          previousPeriodData = getModelData(previousDayEntry[1], modelKey)
           console.log(`[Overview API] 1day mode - Fallback: Found previous day for comparison: ${previousDate}`)
         }
       }
@@ -335,16 +489,16 @@ export async function GET(request: Request) {
         const previousRanks: number[] = []
         const previousReaches: number[] = []
         previousPeriodDataArray.forEach(([date, data]: [string, any]) => {
-          const dayOverall = data.overall
+          const dayOverall = getModelData(data, modelKey)
           if (dayOverall) {
-            const inventecMentionRate = dayOverall.mention_rate?.["英业达"] || 0
+          const inventecMentionRate = dayOverall.mention_rate?.[selfBrandKey] || 0
             if (inventecMentionRate > 0) {
               previousReaches.push(inventecMentionRate)
             }
             
-            if (dayOverall.absolute_rank?.["英业达"] !== undefined && dayOverall.absolute_rank?.["英业达"] !== null) {
+            if (dayOverall.absolute_rank?.[selfBrandKey] !== undefined && dayOverall.absolute_rank?.[selfBrandKey] !== null) {
               let dayRankValue: number = 1
-              const absoluteRankRaw = dayOverall.absolute_rank["英业达"]
+              const absoluteRankRaw = dayOverall.absolute_rank[selfBrandKey]
               
               if (typeof absoluteRankRaw === 'string') {
                 const match = absoluteRankRaw.match(/^([\d.]+)/)
@@ -369,12 +523,15 @@ export async function GET(request: Request) {
         }
         
         // 使用上一周期最后一天的数据作为previousPeriodData（用于其他指标的对比）
-        previousPeriodData = previousPeriodDataArray[previousPeriodDataArray.length - 1][1]?.overall
+        previousPeriodData = getModelData(
+          previousPeriodDataArray[previousPeriodDataArray.length - 1][1],
+          modelKey
+        )
       } else {
         const previousDate = format(previousPeriodEndDateObj, "yyyy-MM-dd")
         const previousDayEntry = productData.find(([date]: [string, any]) => date === previousDate)
         if (previousDayEntry) {
-          previousPeriodData = previousDayEntry[1]?.overall
+          previousPeriodData = getModelData(previousDayEntry[1], modelKey)
         }
       }
     }
@@ -392,7 +549,7 @@ export async function GET(request: Request) {
       if (previousPeriodAverageReach !== null) {
         previousReach = previousPeriodAverageReach
       } else {
-        previousReach = (previousPeriodData.mention_rate?.["英业达"] || 0) * 100
+        previousReach = (previousPeriodData.mention_rate?.[selfBrandKey] || 0) * 100
       }
       reachDelta = reach - previousReach
 
@@ -401,8 +558,8 @@ export async function GET(request: Request) {
       
       if (previousPeriodAverageRank !== null) {
         previousRank = previousPeriodAverageRank
-      } else if (previousPeriodData && previousPeriodData.absolute_rank?.["英业达"] !== undefined && previousPeriodData.absolute_rank?.["英业达"] !== null) {
-        const absoluteRankRaw = previousPeriodData.absolute_rank["英业达"]
+      } else if (previousPeriodData && previousPeriodData.absolute_rank?.[selfBrandKey] !== undefined && previousPeriodData.absolute_rank?.[selfBrandKey] !== null) {
+        const absoluteRankRaw = previousPeriodData.absolute_rank[selfBrandKey]
         
         if (typeof absoluteRankRaw === 'string') {
           const match = absoluteRankRaw.match(/^([\d.]+)/)
@@ -423,13 +580,13 @@ export async function GET(request: Request) {
         rankDelta = inventecRank - previousRank
       }
 
-      const previousFocus = (previousPeriodData.content_share?.["英业达"] || 0) * 100
+      const previousFocus = (previousPeriodData.content_share?.[selfBrandKey] || 0) * 100
       focusDelta = inventecFocus - previousFocus
 
-      const previousSentiment = previousPeriodData.sentiment_score?.["英业达"] || 0
+      const previousSentiment = previousPeriodData.sentiment_score?.[selfBrandKey] || 0
       sentimentDelta = inventecSentiment - previousSentiment
 
-      const previousVisibility = (previousPeriodData.combined_score?.["英业达"] || 0) * 100
+      const previousVisibility = (previousPeriodData.combined_score?.[selfBrandKey] || 0) * 100
       visibilityDelta = inventecVisibility - previousVisibility
     }
 
@@ -494,7 +651,7 @@ export async function GET(request: Request) {
       const competitorScoresAccumulator: Record<string, number[]> = {}
       
       filteredData.forEach(([date, data]: [string, any]) => {
-        const dayOverall = data.overall
+        const dayOverall = getModelData(data, modelKey)
         if (!dayOverall || !dayOverall.total_score) return
         
         Object.entries(dayOverall.total_score).forEach(([name, score]) => {
@@ -527,7 +684,7 @@ export async function GET(request: Request) {
         const previousScoresAccumulator: Record<string, number[]> = {}
         
         previousPeriodDataArray.forEach(([date, data]: [string, any]) => {
-          const dayOverall = data.overall
+          const dayOverall = getModelData(data, modelKey)
           if (!dayOverall || !dayOverall.total_score) return
           
           Object.entries(dayOverall.total_score).forEach(([name, score]) => {
@@ -576,10 +733,10 @@ export async function GET(request: Request) {
       
       competitors.push({
         rank: index + 1,
-        name: comp.name === "英业达" ? "英业达" : comp.name,
+        name: comp.name === selfBrandKey ? selfBrandKey : comp.name,
         score: parseFloat(currentScore.toFixed(1)), // 大数字显示1位小数
         delta: isOneDayRange ? parseFloat(delta.toFixed(0)) : parseFloat(delta.toFixed(1)),
-        isSelf: comp.name === "英业达",
+        isSelf: comp.name === selfBrandKey,
       })
     })
 
@@ -594,10 +751,15 @@ export async function GET(request: Request) {
     console.log(`[Overview API] dataForTrend dates:`, dataForTrend.map(([date]: [string, any]) => date))
     console.log(`[Overview API] dataForTrend.length: ${dataForTrend.length}`)
     
+    // Calculate the actual date range for display (subtract 1 day from file dates)
+    // File dates represent collection dates, so we display the data collection date
+    const actualStartDate = format(subDays(new Date(filteredData[0][0]), 1), "yyyy-MM-dd")
+    const actualEndDate = format(subDays(new Date(filteredData[filteredData.length - 1][0]), 1), "yyyy-MM-dd")
+    
     const brandInfluenceTrend: BrandInfluenceData[] = dataForTrend.map(([date, data]: [string, any]) => {
-      const dayOverall = data.overall
-      const dayScore = dayOverall?.total_score?.["英业达"] || 0
-      console.log(`[Overview API] Processing trend - Date in file: ${date}, total_score["英业达"]: ${dayScore}`)
+      const dayOverall = getModelData(data, modelKey)
+      const dayScore = dayOverall?.total_score?.[selfBrandKey] || 0
+      console.log(`[Overview API] Processing trend - Date in file: ${date}, total_score[${selfBrandKey}]: ${dayScore}`)
       // 将日期向前减一天（后台11.6的数据代表收集到的是11.5的数据）
       const dateObj = new Date(date)
       const displayDate = format(subDays(dateObj, 1), "yyyy-MM-dd")
@@ -616,10 +778,10 @@ export async function GET(request: Request) {
     // 获取所有竞品名称
     const allCompetitorNames = new Set<string>()
     filteredData.forEach(([date, data]: [string, any]) => {
-      const dayOverall = data.overall
+      const dayOverall = getModelData(data, modelKey)
       const competitorScores = dayOverall?.total_score || {}
       Object.keys(competitorScores).forEach(name => {
-        if (name !== "英业达") {
+        if (name !== selfBrandKey) {
           allCompetitorNames.add(name)
         }
       })
@@ -629,7 +791,7 @@ export async function GET(request: Request) {
     // 1day模式：显示最后两天（11.4和11.5）
     allCompetitorNames.forEach((competitorName) => {
       competitorTrends[competitorName] = dataForTrend.map(([date, data]: [string, any]) => {
-        const dayOverall = data.overall
+        const dayOverall = getModelData(data, modelKey)
         const dayScore = dayOverall?.total_score?.[competitorName] || 0
         // 将日期向前减一天
         const dateObj = new Date(date)
@@ -650,8 +812,8 @@ export async function GET(request: Request) {
       currentInfluence = brandInfluenceTrend[brandInfluenceTrend.length - 1]?.brandInfluence || 0
       console.log(`[Overview API] 1day mode - currentInfluence: ${currentInfluence}`)
     } else {
-      // 多天模式：使用平均值（英业达的平均total_score）
-      currentInfluence = competitorScoresMap["英业达"] || 0
+      // 多天模式：使用平均值（自有品牌的平均total_score）
+      currentInfluence = competitorScoresMap[selfBrandKey] || 0
       console.log(`[Overview API] Multi-day mode - currentInfluence: ${currentInfluence}`)
     }
     
@@ -659,8 +821,8 @@ export async function GET(request: Request) {
     let previousInfluence = 0
     if (previousPeriodData) {
       const previousTotalScore = previousPeriodData.total_score || {}
-      previousInfluence = previousTotalScore["英业达"] || 0
-      console.log(`[Overview API] Previous period total_score["英业达"]: ${previousInfluence}`)
+      previousInfluence = previousTotalScore[selfBrandKey] || 0
+      console.log(`[Overview API] Previous period total_score[${selfBrandKey}]: ${previousInfluence}`)
     } else {
       // 如果没有上一周期数据
       if (isOneDayRange) {
@@ -680,6 +842,9 @@ export async function GET(request: Request) {
     
     console.log(`[Overview API] Final brandInfluence values - current: ${currentInfluence}, previous: ${previousInfluence}, changeRate: ${changeRate}`)
 
+    const sources = computeTopSources(filteredData, modelKey, "overall", selfBrandKey)
+    const topics = computeTopTopics(filteredData, modelKey, "overall", selfBrandKey)
+
     const overviewData: OverviewData = {
       kpis,
       brandInfluence: {
@@ -689,8 +854,15 @@ export async function GET(request: Request) {
         trend: brandInfluenceTrend,
       },
       ranking: competitors,
+      sources,
+      topics,
       // 添加竞品趋势数据（如果需要）
       competitorTrends: competitorTrends,
+      // 添加实际日期范围（用于前端显示）
+      actualDateRange: {
+        start: actualStartDate,
+        end: actualEndDate,
+      },
     } as any
 
     console.log(`[Overview API] Returning overview data with ${competitors.length} competitors`)

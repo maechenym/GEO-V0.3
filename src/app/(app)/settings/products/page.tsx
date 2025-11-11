@@ -3,7 +3,6 @@
 import { motion } from "framer-motion"
 import { Save } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useBrandUIStore } from "@/store/brand-ui.store"
 import { useLanguageStore } from "@/store/language.store"
 import { ProductListCard } from "@/components/products/ProductListCard"
@@ -11,10 +10,12 @@ import { PersonasCard } from "@/components/products/PersonasCard"
 import { CompetitorsCard } from "@/components/products/CompetitorsCard"
 import { ProductSelectorCard } from "@/components/products/ProductSelectorCard"
 import { UnsavedChangesGuard } from "@/components/common/UnsavedChangesGuard"
-import { useBrand, useProducts, usePersonas, useCompetitors } from "@/hooks/use-products"
+import { ImageUpload } from "@/components/upload/ImageUpload"
+import { useBrand, useProducts, usePersonas, useCompetitors, useUpdateBrand } from "@/hooks/use-products"
 import { useQueryClient } from "@tanstack/react-query"
 import { useToast } from "@/hooks/use-toast"
 import { translate } from "@/lib/i18n"
+import { useState } from "react"
 
 // 固定使用英业达品牌ID
 const INVENTEC_BRAND_ID = "brand_inventec"
@@ -34,6 +35,8 @@ export default function ProductsSettingsPage() {
   // Fetch brand data
   const { data: brandData, isLoading: brandLoading, error: brandError } = useBrand(selectedBrandId)
   const selectedBrand = brandData?.brand || null
+  const updateBrandMutation = useUpdateBrand()
+  const [brandLogo, setBrandLogo] = useState<string | null>(selectedBrand?.logo || null)
 
   // Fetch related data
   const { data: productsData, isLoading: productsLoading } = useProducts(selectedBrandId)
@@ -130,17 +133,38 @@ export default function ProductsSettingsPage() {
               <>
                 {/* Brand and Product Selector Row */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {/* Brand Name Display */}
-                  <Card className="rounded-2xl">
-                    <CardHeader>
-                      <CardTitle className="text-lg">{translate("Brand", language)}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-base font-medium text-foreground">
+                  {/* Brand Name Display with Logo Upload */}
+                  <div className="rounded-lg border border-gray-200 bg-white p-5">
+                    <h2 className="text-sm font-semibold text-gray-900 mb-4">{translate("Brand", language)}</h2>
+                    <div className="space-y-4">
+                      <div className="text-base font-medium text-gray-900">
                         {translate(selectedBrand.name || "英业达", language)}
                       </div>
-                    </CardContent>
-                  </Card>
+                      <div>
+                        <label className="text-sm font-medium text-gray-700 mb-2 block">
+                          {translate("Brand Logo", language)}
+                        </label>
+                        <ImageUpload
+                          value={brandLogo}
+                          onChange={async (url) => {
+                            setBrandLogo(url)
+                            if (selectedBrandId) {
+                              try {
+                                await updateBrandMutation.mutateAsync({
+                                  id: selectedBrandId,
+                                  data: { logo: url },
+                                })
+                                markSaved()
+                              } catch (error) {
+                                console.error("Failed to update brand logo:", error)
+                              }
+                            }
+                          }}
+                          type="brand"
+                        />
+                      </div>
+                    </div>
+                  </div>
 
                   {/* Product Selector */}
                   <ProductSelectorCard brandId={selectedBrand.id} />
@@ -156,8 +180,8 @@ export default function ProductsSettingsPage() {
                 <CompetitorsCard competitors={competitors} brandId={selectedBrand.id} />
               </>
             ) : (
-              <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-                <p className="text-muted-foreground text-center py-12">
+              <div className="rounded-lg border border-gray-200 bg-white p-6">
+                <p className="text-gray-500 text-center py-12">
                   {translate("Loading products...", language)}
                 </p>
               </div>

@@ -89,6 +89,13 @@ const englishToTraditional: Record<string, string> = {
   "Account actions": "帳戶操作",
   "Logout": "登出",
   "Not available": "不可用",
+  "Subscription Plan": "訂閱方案",
+  "Your current subscription details": "您當前的訂閱詳細資訊",
+  "Plan": "方案",
+  "Subscription Start Date": "訂閱開始日期",
+  "Subscription End Date": "訂閱結束日期",
+  "Remaining Days": "剩餘天數",
+  "Expired": "已過期",
   
   // Products頁面
   "Products": "產品",
@@ -188,6 +195,8 @@ const englishToTraditional: Record<string, string> = {
   "Mentioned_en": "Whether your brand is mentioned in this source (Yes/No)",
   "Mentions": "該來源中提到的所有品牌數量",
   "Mentions_en": "Number of brands mentioned in this source",
+  "Sources Distribution": "不同來源類別的佔比情況，協助識別主要引用來源",
+  "Sources Distribution_en": "How each source category contributes to total mentions, highlighting dominant origins.",
   
   // Tooltips - Intent頁面
   "Core Queries": "代表該品類的核心問題",
@@ -196,6 +205,8 @@ const englishToTraditional: Record<string, string> = {
   "Total Queries_en": "Total number of questions under this category",
   "Intent Distribution": "各類意圖問題在整體中的佔比",
   "Intent Distribution_en": "Proportion of each intent type across all questions",
+  "Query Distribution": "各類查詢問題在整體中的佔比",
+  "Query Distribution_en": "Proportion of each query type across all questions",
   "Topics": "該品類下相關的主要話題",
   "Topics_en": "Main topics related to this category",
   "Total Queries（Topic）": "該主題下的問題總數",
@@ -222,6 +233,8 @@ const englishToTraditional: Record<string, string> = {
   // Tooltips - Overview頁面
   "Brand influence": "結合可見度和情緒，反映品牌在 AI 生態系統中的整體影響力",
   "Brand influence_en": "Combines visibility and sentiment to reflect the brand's overall influence in the AI ecosystem",
+  "Overview description": "根據品牌在 AI 檢索中的可見度與情緒傾向，綜合衡量其整體影響力",
+  "Overview description_en": "Measure your brand's overall influence through its visibility and sentiment in AI search",
   "Reach": "表示品牌在 AI 回答中被提及的頻率 — 更高的觸及率意味著更大的曝光度",
   "Reach_en": "Indicates how often the brand is mentioned in AI responses — higher reach means greater exposure",
   "Rank": "顯示品牌在 AI 回答中出現的時間順序 — 更早的提及表明更高的相關性或優先級",
@@ -232,11 +245,17 @@ const englishToTraditional: Record<string, string> = {
   "Sentiment_en": "Shows AI's emotional tone toward the brand, ranging from negative to positive",
   "Influence ranking": "顯示品牌在 AI 影響力方面與類似產品相比的排名",
   "Influence ranking_en": "Shows how a brand ranks in AI influence compared to similar products",
+  "Sources overview": "瞭解 AI 回答中最常引用的來源網站，以及是否提到你的品牌",
+  "Sources overview_en": "See which sources AI responses cite most often and whether your brand is mentioned.",
+  "Topics overview": "快速掌握本期間最受關注的主題與品牌提及率",
+  "Topics overview_en": "Review the top themes this period and how often your brand appears within them.",
   
   // Tooltips - Visibility頁面
   "Trend": "顯示所選指標（可見度 / 觸及率 / 排名 / 關注度）隨時間的近期變化。使用下拉選單切換",
   "Trend_en": "Shows recent change over time for the selected metric (Visibility / Reach / Rank / Focus). Use the dropdown to switch",
-  
+  "Visibility Heatmap": "來源與主題的交叉熱力圖，用於快速識別模型在何處最常提到你的品牌",
+  "Visibility Heatmap_en": "Source × Topic heatmap that highlights where models most frequently mention your brand.",
+ 
   // Tooltips - Sentiment頁面
   "Sentiment trend": "顯示所選品牌隨時間的情緒趨勢",
   "Sentiment trend_en": "Shows sentiment trend over time for selected brands",
@@ -252,6 +271,18 @@ const englishToTraditional: Record<string, string> = {
   "Admin_en": "Admin",
   "Viewer": "檢視者",
   "Viewer_en": "Viewer",
+  
+  // Time range selector
+  "Last 1Day": "Last 1Day",
+  "Last 1Day_en": "Last 1Day",
+  "Last 7Days": "Last 7Days",
+  "Last 7Days_en": "Last 7Days",
+  "14 days": "14 days",
+  "14 days_en": "14 days",
+  "30 days": "30 days",
+  "30 days_en": "30 days",
+  "Calendar": "日曆",
+  "Calendar_en": "Calendar",
 }
 
 /**

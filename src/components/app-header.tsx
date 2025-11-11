@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { User, LogOut } from "lucide-react"
+import { Logo } from "@/components/logo"
 
 /**
  * 应用顶部导航栏
@@ -32,6 +33,7 @@ export function AppHeader() {
         href="/overview"
         className="flex items-center space-x-2 text-xl font-bold text-primary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-md px-2 py-1"
       >
+        <Logo size={24} />
         <span>ximu</span>
       </Link>
 

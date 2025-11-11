@@ -3,7 +3,17 @@
 import { useEffect, useMemo, useState } from "react"
 import React from "react"
 import { motion } from "framer-motion"
-import { Download, ChevronDown, ChevronUp, HelpCircle } from "lucide-react"
+import { ChevronDown, ChevronUp, HelpCircle } from "lucide-react"
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  Cell,
+} from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -13,12 +23,18 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { PageHeaderFilterBar } from "@/components/filters/PageHeaderFilterBar"
 import { FadeUp, StaggerContainer, staggerItem } from "@/lib/animations"
 import { mockIntentKpis, mockTopicRows, simulateLoad } from "@/mocks/intent"
 import { IntentFilters, TopicRow, SortKey, PromptItem } from "@/types/intent"
 import { useBrandUIStore } from "@/store/brand-ui.store"
 import { useLanguageStore } from "@/store/language.store"
 import { translate, getTooltipContent } from "@/lib/i18n"
+import { getDefaultDateRange, getUserRegisteredAt, getTodayShanghai } from "@/lib/date-utils"
+import { INK_COLORS, CHART_PRIMARY_COLOR } from "@/lib/design-tokens"
+import { MODEL_OPTIONS } from "@/constants/models"
+import type { ModelOptionValue } from "@/constants/models"
+import { useSearchParams } from "next/navigation"
 
 const todayStr = () => new Date().toISOString().slice(0, 10)
 const daysAgoStr = (n: number) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10)
@@ -26,6 +42,17 @@ const daysAgoStr = (n: number) => new Date(Date.now() - n * 86400000).toISOStrin
 export default function IntentPage() {
   const { selectedBrandId, selectedProductId } = useBrandUIStore()
   const { language } = useLanguageStore()
+  const searchParams = useSearchParams()
+
+  // Initialize model from URL or default to "all"
+  const [selectedModel, setSelectedModel] = useState<ModelOptionValue>(
+    (searchParams.get("model") as ModelOptionValue) || "all"
+  )
+
+  // Date range state
+  const [dateRange, setDateRange] = useState(getDefaultDateRange())
+  const minDate = useMemo(() => getUserRegisteredAt(30), [])
+  const maxDate = useMemo(() => getTodayShanghai(), [])
 
   // Filters state
   const [filters, setFilters] = useState<IntentFilters>({
@@ -37,7 +64,22 @@ export default function IntentPage() {
     role: undefined,
     mentionBrand: false,
     visibilitySort: null,
+    model: selectedModel,
   })
+
+  // Handle date range change
+  const handleDateRangeChange = (start: Date, end: Date) => {
+    setDateRange({ start, end })
+  }
+
+  // Handle model change
+  const handleModelChange = (model: ModelOptionValue) => {
+    setSelectedModel(model)
+    setFilters((prev) => ({
+      ...prev,
+      model: model,
+    }))
+  }
 
   // Data state
   const [kpis, setKpis] = useState<typeof mockIntentKpis | null>(null)
@@ -53,6 +95,12 @@ export default function IntentPage() {
 
   // Expanded topics
   const [expandedTopicIds, setExpandedTopicIds] = useState<Set<string>>(new Set())
+
+  // Sort state for expanded table (per topic)
+  const [expandedTableSort, setExpandedTableSort] = useState<{
+    column: "rank" | "focus" | null
+    order: "asc" | "desc"
+  }>({ column: null, order: "asc" })
 
   // Load data
   useEffect(() => {
@@ -79,6 +127,24 @@ export default function IntentPage() {
         break
       case "rankDesc":
         cloned.sort((a, b) => (b.rank || 999) - (a.rank || 999))
+        break
+      case "reachAsc":
+        cloned.sort((a, b) => a.mentionRate - b.mentionRate)
+        break
+      case "reachDesc":
+        cloned.sort((a, b) => b.mentionRate - a.mentionRate)
+        break
+      case "focusAsc":
+        cloned.sort((a, b) => a.visibility - b.visibility)
+        break
+      case "focusDesc":
+        cloned.sort((a, b) => b.visibility - a.visibility)
+        break
+      case "sentimentAsc":
+        cloned.sort((a, b) => (a.sentiment ?? -1) - (b.sentiment ?? -1))
+        break
+      case "sentimentDesc":
+        cloned.sort((a, b) => (b.sentiment ?? -1) - (a.sentiment ?? -1))
         break
       case "visibility":
         cloned.sort((a, b) =>
@@ -175,10 +241,43 @@ export default function IntentPage() {
       }
     })
 
-    return result
+    // Sort by count from high to low
+    return result.sort((a, b) => b.count - a.count)
   }, [filteredRows, language])
 
+  // Prepare chart data for stacked bar chart
+  const chartData = useMemo(() => {
+    if (intentDistribution.length === 0) return []
+    
+    const dataObj: Record<string, number | string> = { name: "Intent" }
+    intentDistribution.forEach((item) => {
+      dataObj[item.intentKey] = item.percentage
+    })
+    return [dataObj]
+  }, [intentDistribution])
+
+  const intentDistributionGradient = useMemo(() => {
+    if (!intentDistribution.length) {
+      return "conic-gradient(#E5E7EB 0% 100%)"
+    }
+
+    let cumulative = 0
+    const segments = intentDistribution.map((item) => {
+      const start = cumulative
+      cumulative += item.percentage
+      const end = Math.min(100, cumulative)
+      return `${item.color} ${start.toFixed(2)}% ${end.toFixed(2)}%`
+    })
+
+    if (cumulative < 100) {
+      segments.push(`#E5E7EB ${cumulative.toFixed(2)}% 100%`)
+    }
+
+    return `conic-gradient(${segments.join(", ")})`
+  }, [intentDistribution])
+
   const handleExport = () => {
+    // TODO: Implement export functionality
     console.log("Export", filteredRows.length)
   }
 
@@ -209,7 +308,7 @@ export default function IntentPage() {
       case "Advice":
         return "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300"
       default:
-        return "bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300"
+        return "bg-ink-100 text-ink-700 dark:bg-ink-900 dark:text-ink-300"
     }
   }
 
@@ -221,39 +320,33 @@ export default function IntentPage() {
       Evaluation: "bg-purple-500",
       Advice: "bg-orange-500",
     }
-    const color = colorMap[intent || ""] || "bg-gray-500"
+    const color = colorMap[intent || ""] || "bg-ink-500"
     return <div className={`h-2 w-2 rounded-full ${color}`} />
   }
 
   return (
     <TooltipProvider>
       <div className="bg-background -mx-6">
-        {/* Top Filter Bar */}
-        <div className="sticky top-0 z-50 bg-white border-b border-border px-6 py-2">
-          <div className="container mx-auto max-w-[1600px]">
-            <div className="flex items-center justify-between">
-              {/* Left: Title */}
-              <div className="-ml-6">
-                <h1 className="text-xl font-semibold text-foreground">Intent Insights</h1>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Analyze AI prompts and answers to understand intent visibility and sentiment
-                </p>
-              </div>
-
-              {/* Right: Filters */}
-              <div className="flex items-center gap-3">
-                {/* Action Buttons */}
-                <Button variant="outline" size="sm" onClick={handleExport} className="h-8 text-xs">
-                  <Download className="h-3 w-3 mr-1.5" />
-                  Export
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <PageHeaderFilterBar
+          title={language === "zh-TW" ? "查詢分析" : "Queries"}
+          description={
+            language === "zh-TW"
+              ? "分析 AI 提示和回答以了解查詢可見度和情緒"
+              : "Analyze AI prompts and answers to understand query visibility and sentiment"
+          }
+          startDate={dateRange.start}
+          endDate={dateRange.end}
+          onDateChange={handleDateRangeChange}
+          minDate={minDate}
+          maxDate={maxDate}
+          selectedModel={selectedModel}
+          onModelChange={handleModelChange}
+          showModelSelector={true}
+          onExport={handleExport}
+        />
 
         {/* Main Content */}
-        <div className="container mx-auto pl-4 pr-4 pt-4 pb-10 max-w-[1600px]">
+        <div className="container mx-auto px-4 sm:px-pageX py-4 sm:py-pageY max-w-[1600px]">
           <div className="space-y-6">
 
         {/* KPI Cards */}
@@ -326,42 +419,91 @@ export default function IntentPage() {
                       </Tooltip>
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="flex-1 flex flex-col justify-center">
-                    {intentDistribution.length > 0 ? (
-                      <div className="space-y-2">
-                        {/* Horizontal Bar Chart */}
-                        <div className="flex h-8 rounded-lg overflow-hidden">
-                          {intentDistribution.map((item) => (
-                            <div
-                              key={item.label}
-                              className="h-full transition-all"
-                              style={{
-                                width: `${item.percentage}%`,
-                                backgroundColor: item.color,
-                              }}
-                              title={`${item.label}: ${item.percentage.toFixed(1)}%`}
-                            />
-                          ))}
+                  <CardContent className="flex-1 flex flex-col">
+                    {intentDistribution.length > 0 && chartData.length > 0 ? (
+                      <>
+                        <div className="h-[60px] w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart
+                              data={chartData}
+                              layout="vertical"
+                              margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" stroke="#EEF2F7" horizontal={false} />
+                              <XAxis
+                                type="number"
+                                domain={[0, 100]}
+                                stroke={INK_COLORS[500]}
+                                style={{ fontSize: "11px" }}
+                                tick={{ fill: INK_COLORS[500] }}
+                                axisLine={false}
+                                tickLine={false}
+                                tickFormatter={(value) => `${value}%`}
+                              />
+                              <YAxis
+                                type="category"
+                                dataKey="name"
+                                stroke={INK_COLORS[500]}
+                                style={{ fontSize: "11px" }}
+                                tick={{ fill: INK_COLORS[500] }}
+                                axisLine={false}
+                                tickLine={false}
+                                hide={true}
+                                width={0}
+                              />
+                              <RechartsTooltip
+                                contentStyle={{
+                                  backgroundColor: "white",
+                                  border: `1px solid ${INK_COLORS[200]}`,
+                                  borderRadius: "8px",
+                                  fontSize: "12px",
+                                  padding: "8px 12px",
+                                }}
+                                labelStyle={{ color: INK_COLORS[900], marginBottom: "4px", fontSize: "11px" }}
+                                formatter={(value: number, name: string) => {
+                                  const entry = intentDistribution.find((item) => item.intentKey === name)
+                                  if (entry) {
+                                    return [
+                                      `${value.toFixed(1)}% (${entry.count.toLocaleString()})`,
+                                      entry.label,
+                                    ]
+                                  }
+                                  return [value, name]
+                                }}
+                              />
+                              {intentDistribution.map((entry, index) => (
+                                <Bar
+                                  key={entry.intentKey}
+                                  dataKey={entry.intentKey}
+                                  stackId="intent"
+                                  fill={entry.color}
+                                  radius={
+                                    index === intentDistribution.length - 1 ? [0, 6, 6, 0] : [0, 0, 0, 0]
+                                  }
+                                />
+                              ))}
+                            </BarChart>
+                          </ResponsiveContainer>
                         </div>
-
                         {/* Legend */}
-                        <div className="flex flex-wrap gap-4 mt-3">
+                        <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 justify-center">
                           {intentDistribution.map((item) => (
-                            <div key={item.label} className="flex items-center gap-2">
-                              <div
+                            <div key={item.intentKey} className="flex items-center gap-2">
+                              <span
                                 className="w-3 h-3 rounded-full"
                                 style={{ backgroundColor: item.color }}
                               />
-                              <span className="text-xs text-muted-foreground">
-                                {item.label} ({item.percentage.toFixed(1)}%)
+                              <span className="text-xs text-ink-600">{item.label}</span>
+                              <span className="text-xs font-medium text-ink-900">
+                                {item.percentage.toFixed(1)}%
                               </span>
                             </div>
                           ))}
                         </div>
-                      </div>
+                      </>
                     ) : (
-                      <div className="flex items-center justify-center h-16">
-                        <div className="text-sm text-muted-foreground">No data available</div>
+                      <div className="text-sm text-muted-foreground flex items-center justify-center h-[200px]">
+                        {language === "zh-TW" ? "無資料" : "No data"}
                       </div>
                     )}
                   </CardContent>
@@ -440,8 +582,27 @@ export default function IntentPage() {
                           </div>
                         </th>
                         <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => {
+                                if (sortKey === "reachDesc") {
+                                  setSortKey("reachAsc")
+                                } else {
+                                  setSortKey("reachDesc")
+                                }
+                              }}
+                              className="flex items-center justify-center gap-1 hover:text-foreground transition-colors group"
+                            >
                             <span>Reach</span>
+                              <div className="flex flex-col">
+                                <ChevronUp 
+                                  className={`h-3 w-3 transition-colors ${sortKey === "reachDesc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
+                                />
+                                <ChevronDown 
+                                  className={`h-3 w-3 -mt-1 transition-colors ${sortKey === "reachAsc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
+                                />
+                              </div>
+                            </button>
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <button className="text-muted-foreground hover:text-foreground transition-colors">
@@ -455,8 +616,27 @@ export default function IntentPage() {
                           </div>
                         </th>
                         <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => {
+                                if (sortKey === "rankDesc") {
+                                  setSortKey("rankAsc")
+                                } else {
+                                  setSortKey("rankDesc")
+                                }
+                              }}
+                              className="flex items-center justify-center gap-1 hover:text-foreground transition-colors group"
+                            >
                             <span>Rank</span>
+                              <div className="flex flex-col">
+                                <ChevronUp 
+                                  className={`h-3 w-3 transition-colors ${sortKey === "rankDesc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
+                                />
+                                <ChevronDown 
+                                  className={`h-3 w-3 -mt-1 transition-colors ${sortKey === "rankAsc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
+                                />
+                              </div>
+                            </button>
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <button className="text-muted-foreground hover:text-foreground transition-colors">
@@ -470,8 +650,27 @@ export default function IntentPage() {
                           </div>
                         </th>
                         <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => {
+                                if (sortKey === "focusDesc") {
+                                  setSortKey("focusAsc")
+                                } else {
+                                  setSortKey("focusDesc")
+                                }
+                              }}
+                              className="flex items-center justify-center gap-1 hover:text-foreground transition-colors group"
+                            >
                             <span>Focus</span>
+                              <div className="flex flex-col">
+                                <ChevronUp 
+                                  className={`h-3 w-3 transition-colors ${sortKey === "focusDesc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
+                                />
+                                <ChevronDown 
+                                  className={`h-3 w-3 -mt-1 transition-colors ${sortKey === "focusAsc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
+                                />
+                              </div>
+                            </button>
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <button className="text-muted-foreground hover:text-foreground transition-colors">
@@ -485,8 +684,27 @@ export default function IntentPage() {
                           </div>
                         </th>
                         <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => {
+                                if (sortKey === "sentimentDesc") {
+                                  setSortKey("sentimentAsc")
+                                } else {
+                                  setSortKey("sentimentDesc")
+                                }
+                              }}
+                              className="flex items-center justify-center gap-1 hover:text-foreground transition-colors group"
+                            >
                             <span>Sentiment</span>
+                              <div className="flex flex-col">
+                                <ChevronUp 
+                                  className={`h-3 w-3 transition-colors ${sortKey === "sentimentDesc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
+                                />
+                                <ChevronDown 
+                                  className={`h-3 w-3 -mt-1 transition-colors ${sortKey === "sentimentAsc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
+                                />
+                              </div>
+                            </button>
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <button className="text-muted-foreground hover:text-foreground transition-colors">
@@ -588,8 +806,27 @@ export default function IntentPage() {
                                             </div>
                                           </th>
                                           <th className="text-center py-2 px-3 text-xs font-medium text-muted-foreground w-[10%]">
-                                            <div className="flex items-center justify-center gap-2">
+                                            <div className="flex items-center justify-center gap-1">
+                                              <button
+                                                onClick={() => {
+                                                  if (expandedTableSort.column === "rank" && expandedTableSort.order === "desc") {
+                                                    setExpandedTableSort({ column: "rank", order: "asc" })
+                                                  } else {
+                                                    setExpandedTableSort({ column: "rank", order: "desc" })
+                                                  }
+                                                }}
+                                                className="flex items-center justify-center gap-1 hover:text-foreground transition-colors group"
+                                              >
                                               <span>Rank</span>
+                                                <div className="flex flex-col">
+                                                  <ChevronUp 
+                                                    className={`h-3 w-3 transition-colors ${expandedTableSort.column === "rank" && expandedTableSort.order === "desc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
+                                                  />
+                                                  <ChevronDown 
+                                                    className={`h-3 w-3 -mt-1 transition-colors ${expandedTableSort.column === "rank" && expandedTableSort.order === "asc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
+                                                  />
+                                                </div>
+                                              </button>
                                               <Tooltip>
                                                 <TooltipTrigger asChild>
                                                   <button className="text-muted-foreground hover:text-foreground transition-colors">
@@ -603,8 +840,27 @@ export default function IntentPage() {
                                             </div>
                                           </th>
                                           <th className="text-center py-2 px-3 text-xs font-medium text-muted-foreground w-[10%]">
-                                            <div className="flex items-center justify-center gap-2">
+                                            <div className="flex items-center justify-center gap-1">
+                                              <button
+                                                onClick={() => {
+                                                  if (expandedTableSort.column === "focus" && expandedTableSort.order === "desc") {
+                                                    setExpandedTableSort({ column: "focus", order: "asc" })
+                                                  } else {
+                                                    setExpandedTableSort({ column: "focus", order: "desc" })
+                                                  }
+                                                }}
+                                                className="flex items-center justify-center gap-1 hover:text-foreground transition-colors group"
+                                              >
                                               <span>Focus</span>
+                                                <div className="flex flex-col">
+                                                  <ChevronUp 
+                                                    className={`h-3 w-3 transition-colors ${expandedTableSort.column === "focus" && expandedTableSort.order === "desc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
+                                                  />
+                                                  <ChevronDown 
+                                                    className={`h-3 w-3 -mt-1 transition-colors ${expandedTableSort.column === "focus" && expandedTableSort.order === "asc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
+                                                  />
+                                                </div>
+                                              </button>
                                               <Tooltip>
                                                 <TooltipTrigger asChild>
                                                   <button className="text-muted-foreground hover:text-foreground transition-colors">
@@ -635,7 +891,24 @@ export default function IntentPage() {
                                         </tr>
                                       </thead>
                                       <tbody>
-                                        {topic.prompts.map((prompt) => (
+                                        {[...topic.prompts]
+                                          .sort((a, b) => {
+                                            if (expandedTableSort.column === "rank") {
+                                              const aRank = a.rank ?? 999
+                                              const bRank = b.rank ?? 999
+                                              return expandedTableSort.order === "asc" 
+                                                ? aRank - bRank 
+                                                : bRank - aRank
+                                            } else if (expandedTableSort.column === "focus") {
+                                              const aFocus = a.focus ?? 0
+                                              const bFocus = b.focus ?? 0
+                                              return expandedTableSort.order === "asc" 
+                                                ? aFocus - bFocus 
+                                                : bFocus - aFocus
+                                            }
+                                            return 0
+                                          })
+                                          .map((prompt) => (
                                           <tr
                                             key={prompt.id}
                                             className="border-b border-border/50 hover:bg-background/50 transition-colors"

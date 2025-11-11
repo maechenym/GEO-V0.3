@@ -1,7 +1,6 @@
 "use client"
 
 import { useMemo, useEffect, useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Select,
   SelectContent,
@@ -77,57 +76,48 @@ export function ProductSelectorCard({ brandId }: ProductSelectorCardProps) {
   // 如果还在加载或没有产品，显示加载状态
   if (isLoading) {
     return (
-      <Card className="rounded-2xl">
-        <CardHeader>
-          <CardTitle className="text-lg">{translate("Product", language)}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-sm text-muted-foreground">
-            {translate("Loading products...", language)}
-          </div>
-        </CardContent>
-      </Card>
+      <div className="rounded-lg border border-gray-200 bg-white p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-gray-900">{translate("Product", language)}</h2>
+        </div>
+        <div className="text-sm text-gray-500">
+          {translate("Loading products...", language)}
+        </div>
+      </div>
     )
   }
 
   if (activeProducts.length === 0) {
     return (
-      <Card className="rounded-2xl">
-        <CardHeader>
-          <CardTitle className="text-lg">{translate("Product", language)}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-sm text-muted-foreground">
-            {translate("No active products available", language)}
-          </div>
-        </CardContent>
-      </Card>
+      <div className="rounded-lg border border-gray-200 bg-white p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-gray-900">{translate("Product", language)}</h2>
+        </div>
+        <div className="text-sm text-gray-500">
+          {translate("No active products available", language)}
+        </div>
+      </div>
     )
   }
 
   return (
-    <Card className="rounded-2xl">
-      <CardHeader>
-        <CardTitle className="text-lg">{translate("Product", language)}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Select
-          value={currentProductId}
-          onValueChange={handleProductChange}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder={translate("Select a product", language)} />
-          </SelectTrigger>
-          <SelectContent>
-            {activeProducts.map((product: Product) => (
-              <SelectItem key={product.id} value={product.id}>
-                {translate(product.name, language)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </CardContent>
-    </Card>
+    <div className="rounded-lg border border-gray-200 bg-white p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold text-gray-900">{translate("Product", language)}</h2>
+      </div>
+      <Select value={currentProductId} onValueChange={handleProductChange}>
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder={translate("Select a product", language)} />
+        </SelectTrigger>
+        <SelectContent>
+          {activeProducts.map((product: Product) => (
+            <SelectItem key={product.id} value={product.id}>
+              {translate(product.name, language)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   )
 }
 
