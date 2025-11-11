@@ -11,7 +11,7 @@ import { FormMessage } from "@/components/ui/form-message"
 function GoogleCallbackContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { loginWithToken, loadProfile, setIsNew } = useAuthStore()
+  const { loginWithToken, loadProfile } = useAuthStore()
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -31,11 +31,10 @@ function GoogleCallbackContent() {
 
         if (result.ok) {
           await loginWithToken(result.token)
-          setIsNew(result.isNew)
           const profile = await loadProfile()
 
-          // 根据 isNew 和 hasBrand 决定跳转
-          if (result.isNew || !profile.hasBrand) {
+          // 根据 hasBrand 决定跳转
+          if (!profile.hasBrand) {
             router.push("/onboarding/brand")
           } else {
             router.push("/overview")
@@ -51,7 +50,7 @@ function GoogleCallbackContent() {
     }
 
     handleCallback()
-  }, [searchParams, router, loginWithToken, loadProfile, setIsNew])
+  }, [searchParams, router, loginWithToken, loadProfile])
 
   if (isLoading) {
     return (

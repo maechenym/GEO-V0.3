@@ -10,7 +10,6 @@ import { PersonasCard } from "@/components/products/PersonasCard"
 import { CompetitorsCard } from "@/components/products/CompetitorsCard"
 import { ProductSelectorCard } from "@/components/products/ProductSelectorCard"
 import { UnsavedChangesGuard } from "@/components/common/UnsavedChangesGuard"
-import { ImageUpload } from "@/components/upload/ImageUpload"
 import { useBrand, useProducts, usePersonas, useCompetitors, useUpdateBrand } from "@/hooks/use-products"
 import { useQueryClient } from "@tanstack/react-query"
 import { useToast } from "@/hooks/use-toast"
@@ -36,7 +35,6 @@ export default function ProductsSettingsPage() {
   const { data: brandData, isLoading: brandLoading, error: brandError } = useBrand(selectedBrandId)
   const selectedBrand = brandData?.brand || null
   const updateBrandMutation = useUpdateBrand()
-  const [brandLogo, setBrandLogo] = useState<string | null>(selectedBrand?.logo || null)
 
   // Fetch related data
   const { data: productsData, isLoading: productsLoading } = useProducts(selectedBrandId)
@@ -133,36 +131,11 @@ export default function ProductsSettingsPage() {
               <>
                 {/* Brand and Product Selector Row */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {/* Brand Name Display with Logo Upload */}
+                  {/* Brand Name Display */}
                   <div className="rounded-lg border border-gray-200 bg-white p-5">
                     <h2 className="text-sm font-semibold text-gray-900 mb-4">{translate("Brand", language)}</h2>
-                    <div className="space-y-4">
-                      <div className="text-base font-medium text-gray-900">
-                        {translate(selectedBrand.name || "英业达", language)}
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-700 mb-2 block">
-                          {translate("Brand Logo", language)}
-                        </label>
-                        <ImageUpload
-                          value={brandLogo}
-                          onChange={async (url) => {
-                            setBrandLogo(url)
-                            if (selectedBrandId) {
-                              try {
-                                await updateBrandMutation.mutateAsync({
-                                  id: selectedBrandId,
-                                  data: { logo: url },
-                                })
-                                markSaved()
-                              } catch (error) {
-                                console.error("Failed to update brand logo:", error)
-                              }
-                            }
-                          }}
-                          type="brand"
-                        />
-                      </div>
+                    <div className="text-base font-medium text-gray-900">
+                      {translate(selectedBrand.name || "英业达", language)}
                     </div>
                   </div>
 

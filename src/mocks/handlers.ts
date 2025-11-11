@@ -260,13 +260,20 @@ export const handlers = [
   // POST /api/auth/signup
   http.post("*/api/auth/signup", async ({ request }) => {
     const body = await request.json()
-    const email = (body as { email: string }).email
+    const { email, password } = body as { email: string; password: string }
+
+    if (!email || !password) {
+      return HttpResponse.json(
+        { ok: false, error: "Email and password are required" },
+        { status: 400 }
+      )
+    }
 
     // 检查是否已存在
     const existingUser = mockUsers[email]
     const isNew = !existingUser
 
-    // 创建新用户
+    // 创建新用户（mock 模式下不验证密码）
     if (isNew) {
       mockUsers[email] = {
         id: `u_${Date.now()}`,
@@ -285,12 +292,19 @@ export const handlers = [
   // POST /api/auth/login
   http.post("*/api/auth/login", async ({ request }) => {
     const body = await request.json()
-    const email = (body as { email: string }).email
+    const { email, password } = body as { email: string; password: string }
+
+    if (!email || !password) {
+      return HttpResponse.json(
+        { ok: false, error: "Email and password are required" },
+        { status: 400 }
+      )
+    }
 
     const user = mockUsers[email]
     const isNew = !user
 
-    // 如果用户不存在，创建新用户
+    // 如果用户不存在，创建新用户（mock 模式下不验证密码）
     if (isNew) {
       mockUsers[email] = {
         id: `u_${Date.now()}`,
@@ -1880,9 +1894,9 @@ export const handlers = [
   }),
 
 
-  // GET /api/products/:productId/analytics
+  // GET /api/products/:id/analytics
   // 获取产品分析数据（从JSON文件读取）
-  http.get("*/api/products/:productId/analytics", async ({ request, params }) => {
+  http.get("*/api/products/:id/analytics", async ({ request, params }) => {
     const authHeader = request.headers.get("Authorization")
     const token = authHeader?.replace("Bearer ", "")
 
@@ -1890,13 +1904,13 @@ export const handlers = [
       return HttpResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { productId } = params as { productId: string }
+    const { id } = params as { id: string }
     const url = new URL(request.url)
     const startDate = url.searchParams.get("startDate")
     const endDate = url.searchParams.get("endDate")
 
     // 解码产品名称（URL编码）
-    const productName = decodeURIComponent(productId)
+    const productName = decodeURIComponent(id)
 
     try {
       // 在MSW中，我们需要通过实际的API route获取数据

@@ -55,7 +55,6 @@ interface ProductListCardProps {
 const productSchema = z.object({
   name: z.string().min(1, "Product name is required"),
   category: z.string().optional().nullable(),
-  logo: z.string().optional().nullable(),
 })
 
 type ProductForm = z.infer<typeof productSchema>
@@ -78,7 +77,6 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
   const [editId, setEditId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
-  const [editingLogo, setEditingLogo] = useState<string | null>(null)
 
   const {
     register,
@@ -108,11 +106,9 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
   const handleEditProduct = (product: Product) => {
     setEditingProduct(product)
     setEditId(product.id)
-    setEditingLogo(product.logo || null)
     resetEdit({
       name: product.name,
       category: product.category || "",
-      logo: product.logo || null,
     })
   }
 
@@ -120,15 +116,11 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
     if (!editId) return
     await updateProductMutation.mutateAsync({
       id: editId,
-      data: {
-        ...data,
-        logo: editingLogo,
-      },
+      data,
     })
     resetEdit()
     setEditId(null)
     setEditingProduct(null)
-    setEditingLogo(null)
     markSaved()
   }
 
@@ -267,7 +259,6 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
                               resetEdit()
                               setEditId(null)
                               setEditingProduct(null)
-                              setEditingLogo(null)
                             }}
                             aria-label="Cancel editing"
                           >

@@ -23,7 +23,6 @@ export async function PATCH(
       name: body.name || "Product",
       category: body.category ?? null,
       active: body.active !== undefined ? body.active : true,
-      logo: body.logo ?? null,
     },
   })
 }

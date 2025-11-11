@@ -17,6 +17,7 @@ import { FormMessage } from "@/components/ui/form-message"
 
 const signupSchema = z.object({
   email: z.string().email("请输入有效的邮箱地址"),
+  password: z.string().min(6, "密码至少需要6个字符"),
 })
 
 type SignupForm = z.infer<typeof signupSchema>
@@ -38,7 +39,7 @@ type SignupForm = z.infer<typeof signupSchema>
  */
 export default function SignupPage() {
   const router = useRouter()
-  const { token, profile, loginWithToken, loadProfile, setIsNew } = useAuthStore()
+  const { token, profile, loginWithToken, loadProfile } = useAuthStore()
 
   const {
     register,
@@ -60,16 +61,25 @@ export default function SignupPage() {
   // Sign up 提交
   const onSignup = async (data: SignupForm) => {
     try {
-      const response = await apiClient.post("/api/auth/signup", { email: data.email })
+      const response = await apiClient.post("/api/auth/signup", { 
+        email: data.email,
+        password: data.password 
+      })
       const result = SignupResponseSchema.parse(response.data)
 
       if (result.ok) {
+        // 保存 token
         await loginWithToken(result.token)
-        setIsNew(result.isNew)
-        await loadProfile()
+        
+        // 调用 GET /api/auth/session 拉取 profile.hasBrand
+        const profile = await loadProfile()
 
-        // 新用户优先进入 onboarding
-        router.push("/onboarding/brand")
+        // 根据 hasBrand 决定跳转
+        if (!profile.hasBrand) {
+          router.push("/onboarding/brand")
+        } else {
+          router.push("/overview")
+        }
       }
     } catch (error: unknown) {
       const message = error && typeof error === "object" && "message" in error
@@ -124,6 +134,23 @@ export default function SignupPage() {
               aria-describedby={errors.email ? "email-error" : undefined}
             />
             <FormMessage message={errors.email?.message} variant="error" />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="password">
+              Password <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="至少6个字符"
+              {...register("password")}
+              disabled={isSubmitting}
+              className={errors.password ? "border-destructive" : ""}
+              aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? "password-error" : undefined}
+            />
+            <FormMessage message={errors.password?.message} variant="error" />
           </div>
 
           {errors.root && <FormMessage message={errors.root.message} variant="error" />}

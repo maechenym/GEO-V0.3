@@ -8,7 +8,6 @@ export const BrandSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string().optional().nullable(),
-  logo: z.string().optional().nullable(), // Logo URL
   website: z.string().optional().nullable(), // Website URL
 })
 
@@ -20,7 +19,6 @@ export const ProductSchema = z.object({
   name: z.string(),
   category: z.string().optional().nullable(),
   active: z.boolean().default(true),
-  logo: z.string().optional().nullable(), // Logo URL
 })
 
 export type Product = z.infer<typeof ProductSchema>
@@ -60,7 +58,6 @@ export type GetBrandResponse = z.infer<typeof GetBrandResponseSchema>
 export const UpdateBrandRequestSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional().nullable(),
-  logo: z.string().optional().nullable(), // Logo URL
   website: z.string().optional().nullable(), // Website URL
 })
 
@@ -84,7 +81,6 @@ export type GetProductsResponse = z.infer<typeof GetProductsResponseSchema>
 export const CreateProductRequestSchema = z.object({
   name: z.string().min(1),
   category: z.string().optional().nullable(),
-  logo: z.string().optional().nullable(), // Logo URL
 })
 
 export type CreateProductRequest = z.infer<typeof CreateProductRequestSchema>
@@ -94,7 +90,6 @@ export const UpdateProductRequestSchema = z.object({
   name: z.string().min(1).optional(),
   category: z.string().optional().nullable(),
   active: z.boolean().optional(),
-  logo: z.string().optional().nullable(), // Logo URL
 })
 
 export type UpdateProductRequest = z.infer<typeof UpdateProductRequestSchema>
@@ -181,7 +176,6 @@ export type GetBrandsResponse = z.infer<typeof GetBrandsResponseSchema>
 export const CreateBrandRequestSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional().nullable(),
-  logo: z.string().optional().nullable(), // Logo URL
   website: z.string().optional().nullable(), // Website URL
 })
 

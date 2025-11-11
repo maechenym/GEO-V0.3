@@ -79,17 +79,17 @@ export default function BrandOnboardingPage() {
     setIsSubmitting(false)
   }
 
-  // 处理对话框确认，跳转到 overview
+  // 处理对话框确认，跳转到 waitlist
   const handleGotIt = () => {
     setShowWelcomeDialog(false)
-    router.push("/overview")
+    router.push("/onboarding/waitlist")
   }
 
   // 处理对话框关闭（无论是点击按钮还是点击外部区域）
   const handleDialogChange = (open: boolean) => {
     if (!open && showWelcomeDialog) {
-      // 对话框被关闭，跳转到 overview
-      router.push("/overview")
+      // 对话框被关闭，跳转到 waitlist
+      router.push("/onboarding/waitlist")
     }
     setShowWelcomeDialog(open)
   }

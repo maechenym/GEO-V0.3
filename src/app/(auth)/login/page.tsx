@@ -17,6 +17,7 @@ import { FormMessage } from "@/components/ui/form-message"
 
 const loginSchema = z.object({
   email: z.string().email("请输入有效的邮箱地址"),
+  password: z.string().min(1, "请输入密码"),
 })
 
 type LoginForm = z.infer<typeof loginSchema>
@@ -38,7 +39,7 @@ type LoginForm = z.infer<typeof loginSchema>
  */
 export default function LoginPage() {
   const router = useRouter()
-  const { token, profile, loginWithToken, loadProfile, setIsNew } = useAuthStore()
+  const { token, profile, loginWithToken, loadProfile } = useAuthStore()
 
   const {
     register,
@@ -60,16 +61,21 @@ export default function LoginPage() {
   // Login 提交
   const onLogin = async (data: LoginForm) => {
     try {
-      const response = await apiClient.post("/api/auth/login", { email: data.email })
+      const response = await apiClient.post("/api/auth/login", { 
+        email: data.email,
+        password: data.password 
+      })
       const result = LoginResponseSchema.parse(response.data)
 
       if (result.ok) {
+        // 保存 token，建立会话
         await loginWithToken(result.token)
-        setIsNew(result.isNew)
+        
+        // 调用 GET /api/auth/session 拉取 profile.hasBrand
         const profile = await loadProfile()
 
-        // 根据 isNew 和 hasBrand 决定跳转
-        if (result.isNew || !profile.hasBrand) {
+        // 根据 hasBrand 决定跳转
+        if (!profile.hasBrand) {
           router.push("/onboarding/brand")
         } else {
           router.push("/overview")
@@ -128,6 +134,23 @@ export default function LoginPage() {
               aria-describedby={errors.email ? "email-error" : undefined}
             />
             <FormMessage message={errors.email?.message} variant="error" />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="password">
+              Password <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="请输入密码"
+              {...register("password")}
+              disabled={isSubmitting}
+              className={errors.password ? "border-destructive" : ""}
+              aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? "password-error" : undefined}
+            />
+            <FormMessage message={errors.password?.message} variant="error" />
           </div>
 
           {errors.root && <FormMessage message={errors.root.message} variant="error" />}

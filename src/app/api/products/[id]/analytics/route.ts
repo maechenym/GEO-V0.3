@@ -3,15 +3,24 @@ import { readFileSync } from "fs"
 import { join } from "path"
 
 /**
- * POST /api/products/:productId/import-competitors
- * 从JSON文件导入指定产品的竞品数据
+ * GET /api/products/:id/analytics
+ * 获取指定产品的分析数据
  */
-export async function POST(
+export async function GET(
   request: NextRequest,
-  { params }: { params: { productId: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const productName = decodeURIComponent(params.productId)
+    // Handle both sync and async params (Next.js 15+ uses Promise)
+    const resolvedParams = await Promise.resolve(params)
+    const { searchParams } = new URL(request.url)
+    const startDate = searchParams.get("startDate")
+    const endDate = searchParams.get("endDate")
+    
+    // 根据id获取产品名称
+    // 这里需要从数据库或存储中获取产品名称
+    // 目前使用id作为产品名称（假设id就是产品名称）
+    const productName = decodeURIComponent(resolvedParams.id)
     
     // 读取JSON文件（优先从项目 data 目录）
     const projectRoot = process.cwd()
@@ -47,43 +56,21 @@ export async function POST(
       )
     }
     
-    // 获取第一个日期的数据
-    const productData = data[productName]
-    if (!productData || productData.length === 0) {
-      return NextResponse.json(
-        { error: "No data available for this product" },
-        { status: 404 }
-      )
+    let productData = data[productName]
+    
+    // 如果指定了日期范围，过滤数据
+    if (startDate && endDate) {
+      productData = productData.filter(([date]: [string, any]) => {
+        return date >= startDate && date <= endDate
+      })
     }
-    
-    const firstDayData = productData[0][1]
-    const overall = firstDayData.overall
-    
-    if (!overall || !overall.mention_rate) {
-      return NextResponse.json(
-        { error: "No competitor data available" },
-        { status: 404 }
-      )
-    }
-    
-    // 提取竞品列表
-    const competitors = Object.keys(overall.mention_rate)
-      .filter(name => name !== "英业达") // 排除自己
-      .slice(0, 20) // 限制为前20个
     
     return NextResponse.json({
       productName,
-      competitors: competitors.map(name => ({
-        name,
-        // 可以包含其他信息如score等
-        mentionRate: overall.mention_rate[name],
-        contentShare: overall.content_share[name],
-        sentimentScore: overall.sentiment_score[name],
-        totalScore: overall.total_score[name],
-      })),
+      data: productData,
     })
   } catch (error) {
-    console.error("Error importing competitors:", error)
+    console.error("Error fetching product analytics:", error)
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

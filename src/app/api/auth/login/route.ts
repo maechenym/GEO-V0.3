@@ -12,11 +12,19 @@ export async function POST(request: NextRequest) {
   // 如果 NEXT_PUBLIC_USE_MOCK 不是 "false"，则使用 mock 数据
   const useMock = process.env.NEXT_PUBLIC_USE_MOCK !== "false"
   
-  if (useMock) {
-    const body = await request.json()
-    const email = (body as { email: string }).email
+  const body = await request.json()
+  const { email, password } = body as { email: string; password: string }
 
-    // Mock response
+  if (!email || !password) {
+    return NextResponse.json(
+      { ok: false, error: "Email and password are required" },
+      { status: 400 }
+    )
+  }
+
+  if (useMock) {
+    // Mock response - 验证密码（mock 模式：任何密码都可以）
+    // 返回 JWT token
     return NextResponse.json({
       ok: true,
       token: `mock_login_token_${email}`,
@@ -24,10 +32,8 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  // Real mode: 临时返回 mock 数据，避免 501 错误
-  const body = await request.json()
-  const email = (body as { email: string }).email
-
+  // Real mode: 实现实际的登录逻辑
+  // TODO: 验证邮箱和密码，返回 JWT token
   return NextResponse.json({
     ok: true,
     token: `mock_login_token_${email}`,
