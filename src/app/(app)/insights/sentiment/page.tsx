@@ -55,6 +55,7 @@ type TopicItem = {
 
 type SourceItem = {
   name: string
+  type: string // Source category type, e.g., "Official Website", "News", "UGC", "Social Media", "Knowledge Base", "Academic"
   pos: number
   neu: number
   neg: number
@@ -122,11 +123,13 @@ const MOCK_TOPICS = {
 }
 
 const MOCK_SOURCES: SourceItem[] = [
-  { name: "TechCrunch", pos: 60, neu: 30, neg: 10 },
-  { name: "Forbes", pos: 55, neu: 35, neg: 10 },
-  { name: "The Verge", pos: 50, neu: 40, neg: 10 },
-  { name: "Wired", pos: 45, neu: 40, neg: 15 },
-  { name: "Ars Technica", pos: 40, neu: 45, neg: 15 },
+  { name: "Official Website", type: "Official Website", pos: 65, neu: 25, neg: 10 },
+  { name: "TechCrunch", type: "News", pos: 60, neu: 30, neg: 10 },
+  { name: "Forbes", type: "News", pos: 55, neu: 35, neg: 10 },
+  { name: "Blog Example", type: "UGC", pos: 50, neu: 40, neg: 10 },
+  { name: "Social Media", type: "Social Media", pos: 45, neu: 40, neg: 15 },
+  { name: "Knowledge Base", type: "Knowledge Base", pos: 55, neu: 35, neg: 10 },
+  { name: "Academic", type: "Academic", pos: 40, neu: 45, neg: 15 },
 ]
 
 const METRIC_TOOLTIPS = {
@@ -658,7 +661,7 @@ export default function SentimentPage() {
                     <CartesianGrid strokeDasharray="3 3" stroke="#EEF2F7" vertical={false} />
                     <XAxis
                       type="category"
-                      dataKey="name"
+                      dataKey="type"
                       stroke={INK_COLORS[500]}
                       style={{ fontSize: "11px" }}
                       axisLine={false}

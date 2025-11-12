@@ -393,7 +393,7 @@ export default function VisibilityPage() {
 
   const handleTopicNavigate = useCallback(
     (topic: HeatmapTopic) => {
-      buildNavigationQuery("/insights/queries", { topic: topic.slug })
+      buildNavigationQuery("/insights/intent", { topic: topic.slug })
     },
     [buildNavigationQuery]
   )
@@ -1019,14 +1019,12 @@ export default function VisibilityPage() {
                           {language === "zh-TW" ? "來源 / 主題" : "Source / Topic"}
                         </div>
                         {heatmapData.topics.map((topic) => (
-                          <button
+                          <div
                             key={topic.slug}
-                            type="button"
-                            onClick={() => handleTopicNavigate(topic)}
-                            className="px-4 py-2 border-b border-ink-100 text-left font-medium text-ink-700 transition-colors hover:text-brand-600"
+                            className="px-4 py-2 border-b border-ink-100 text-left font-medium text-ink-700"
                           >
                             {topic.name}
-                          </button>
+                          </div>
                         ))}
 
                         {heatmapData.sources.map((source) => (

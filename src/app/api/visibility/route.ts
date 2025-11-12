@@ -28,15 +28,32 @@ const FALLBACK_SOURCES = [
   "arstechnica.com",
 ]
 
+// 固定的 6 个主题，与 Intent 页面和 Overview 页面同步
 const FALLBACK_TOPICS = [
-  { name: "AI server infrastructure", example: "Discussions about AI server infrastructure and deployment choices." },
-  { name: "Edge computing strategies", example: "Examples describing how brands approach edge computing workloads." },
-  { name: "Cloud security posture", example: "Commentary on cloud security practices and safeguards." },
-  { name: "Hyper-converged architecture", example: "Coverage of hyper-converged infrastructure designs and benefits." },
-  { name: "Sustainability in data centers", example: "Mentions of energy efficiency and sustainability initiatives." },
-  { name: "High-performance computing", example: "References to HPC workloads and performance benchmarks." },
-  { name: "Telecom and 5G solutions", example: "Insights about telecom infrastructure and 5G enablement." },
-  { name: "AI accelerator landscape", example: "Notes on accelerator hardware and AI chipset selections." },
+  { 
+    name: "Performance and Architecture", 
+    example: "Discussions about rack server performance, CPU architecture, memory configurations, and processing capabilities." 
+  },
+  { 
+    name: "Cooling, Power Efficiency and High-Density Deployment", 
+    example: "Examples describing cooling systems, power consumption, PUE optimization, and high-density data center deployments." 
+  },
+  { 
+    name: "Data Center-Grade Stability and High Availability", 
+    example: "Commentary on server reliability, redundant components, fault tolerance, and mission-critical application support." 
+  },
+  { 
+    name: "AI, Deep Learning and High-Performance Computing Applications", 
+    example: "References to AI workloads, GPU support, deep learning infrastructure, and HPC cluster configurations." 
+  },
+  { 
+    name: "Edge Computing and Private Cloud / Hybrid Cloud Deployment", 
+    example: "Insights about edge server solutions, private cloud infrastructure, hybrid cloud deployments, and distributed computing." 
+  },
+  { 
+    name: "Security, Maintenance and Remote Management", 
+    example: "Notes on server security features, remote management capabilities, maintenance procedures, and enterprise security standards." 
+  },
 ]
 
 interface RankingItem {
@@ -830,20 +847,55 @@ export async function GET(request: Request) {
         }
       })
 
+      // 先计算 rankedSelfTopics 和 rankedOtherTopics（用于后续的映射）
       const rankedSelfTopics = sortEntries(selfTopicCounts)
       const rankedOtherTopics = sortEntries(otherTopicCounts)
-      const selectedTopicsRaw = selectEntries(
-        rankedSelfTopics,
-        rankedOtherTopics,
-        FALLBACK_TOPICS.map((topic) => topic.name),
-      )
 
-      selectedTopicsRaw.forEach(({ key }) => {
-        if (!topicExamples.has(key)) {
-          const fallbackTopic = FALLBACK_TOPICS.find((item) => item.name === key)
-          topicExamples.set(key, fallbackTopic?.example || key)
+      // 使用固定的 6 个主题，与 Intent 页面同步
+      // 从数据中提取相关主题的提及次数，并映射到固定主题
+      const fixedTopicMap = new Map<string, number>()
+      const fixedTopicExamples = new Map<string, string>()
+      
+      // 初始化所有固定主题
+      FALLBACK_TOPICS.forEach((topic) => {
+        fixedTopicMap.set(topic.name, 0)
+        fixedTopicExamples.set(topic.name, topic.example)
+      })
+
+      // 从数据中提取相关主题的提及次数
+      const allTopics = [...rankedSelfTopics, ...rankedOtherTopics]
+      allTopics.forEach(([topicName, count]) => {
+        const normalized = topicName.toLowerCase()
+        
+        // 关键词匹配逻辑，将数据中的 topics 映射到固定主题
+        if (normalized.includes("performance") || normalized.includes("architecture") || normalized.includes("架构") || normalized.includes("性能")) {
+          fixedTopicMap.set(FALLBACK_TOPICS[0].name, (fixedTopicMap.get(FALLBACK_TOPICS[0].name) || 0) + count)
+        } else if (normalized.includes("cooling") || normalized.includes("power") || normalized.includes("density") || normalized.includes("散热") || normalized.includes("能耗") || normalized.includes("高密度")) {
+          fixedTopicMap.set(FALLBACK_TOPICS[1].name, (fixedTopicMap.get(FALLBACK_TOPICS[1].name) || 0) + count)
+        } else if (normalized.includes("stability") || normalized.includes("availability") || normalized.includes("reliability") || normalized.includes("稳定性") || normalized.includes("高可用")) {
+          fixedTopicMap.set(FALLBACK_TOPICS[2].name, (fixedTopicMap.get(FALLBACK_TOPICS[2].name) || 0) + count)
+        } else if (normalized.includes("ai") || normalized.includes("deep learning") || normalized.includes("hpc") || normalized.includes("gpu") || normalized.includes("人工智能") || normalized.includes("深度学习") || normalized.includes("高性能计算")) {
+          fixedTopicMap.set(FALLBACK_TOPICS[3].name, (fixedTopicMap.get(FALLBACK_TOPICS[3].name) || 0) + count)
+        } else if (normalized.includes("edge") || normalized.includes("cloud") || normalized.includes("hybrid") || normalized.includes("边缘计算") || normalized.includes("私有云") || normalized.includes("混合云")) {
+          fixedTopicMap.set(FALLBACK_TOPICS[4].name, (fixedTopicMap.get(FALLBACK_TOPICS[4].name) || 0) + count)
+        } else if (normalized.includes("security") || normalized.includes("maintenance") || normalized.includes("remote") || normalized.includes("management") || normalized.includes("安全性") || normalized.includes("维护") || normalized.includes("远程管理")) {
+          fixedTopicMap.set(FALLBACK_TOPICS[5].name, (fixedTopicMap.get(FALLBACK_TOPICS[5].name) || 0) + count)
         }
       })
+
+      // 如果没有匹配到数据，给每个主题分配一个基础值
+      const totalFixedTopicCounts = Array.from(fixedTopicMap.values()).reduce((sum, count) => sum + count, 0)
+      if (totalFixedTopicCounts === 0) {
+        FALLBACK_TOPICS.forEach((topic, index) => {
+          fixedTopicMap.set(topic.name, 10 - index) // 第一个主题10次，第二个9次，以此类推
+        })
+      }
+
+      // 构建选中的主题列表（按提及次数排序）
+      const selectedTopicsRaw = Array.from(fixedTopicMap.entries())
+        .map(([key, count]) => ({ key, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 6) // 确保只返回 6 个主题
 
       const totalSourceMentions =
         selectedSources.reduce((sum, entry) => sum + entry.count, 0) || selectedSources.length || 1
@@ -862,7 +914,8 @@ export async function GET(request: Request) {
       })
 
       const topicsWithShare = selectedTopicsRaw.map((entry) => {
-        const example = topicExamples.get(entry.key) || entry.key
+        // 优先使用固定主题的示例，如果没有则使用从数据中提取的示例
+        const example = fixedTopicExamples.get(entry.key) || topicExamples.get(entry.key) || entry.key
         return {
           name: entry.key,
           slug: slugify(entry.key),
