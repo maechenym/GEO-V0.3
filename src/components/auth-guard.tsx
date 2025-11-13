@@ -61,6 +61,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     ]
     const isPublicPath = publicPaths.includes(pathname || "") || pathname?.startsWith("/auth/")
     
+    // 允许访问分析结果和订阅页面（需要登录）
+    const isAnalysisOrSubscribePath = pathname === "/analysis-results" || pathname === "/subscribe"
+    
     // Onboarding 路径
     const isOnboardingPath = pathname?.startsWith("/onboarding") ?? false
 
@@ -78,10 +81,21 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       return
     }
 
-    // 如果未登录，重定向到登录页（保护所有非公共路径）
+    // 如果未登录，重定向到登录页（保护所有非公共路径，除了分析结果和订阅页面需要特殊处理）
     if (!token || !profile) {
+      // 分析结果和订阅页面需要登录
+      if (isAnalysisOrSubscribePath) {
+        redirectingRef.current = true
+        router.replace("/login")
+        return
+      }
       redirectingRef.current = true
       router.replace("/login")
+      return
+    }
+    
+    // 已登录用户可以访问分析结果和订阅页面
+    if (isAnalysisOrSubscribePath) {
       return
     }
 

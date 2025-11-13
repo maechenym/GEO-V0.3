@@ -18,6 +18,7 @@ import type { CheckoutPlan } from "@/store/checkout.store"
 import { useCheckoutStore } from "@/store/checkout.store"
 import { usePlanStore } from "@/store/plan.store"
 import { useLanguageStore } from "@/store/language.store"
+import { useAuthStore } from "@/store/auth.store"
 import { translate } from "@/lib/i18n"
 import apiClient from "@/services/api"
 
@@ -68,10 +69,11 @@ export function PlanCard({ plan, isCurrentPlan = false }: PlanCardProps) {
     setIsRedirecting(true)
 
     try {
-      // Create Stripe Checkout Session
-      const response = await apiClient.post("/stripe/create-checkout-session", {
+      // Create Stripe Checkout Session with 7-day trial
+      const response = await apiClient.post("/api/stripe/create-checkout-session", {
         priceId: plan.priceId,
         planId: plan.planId,
+        trialPeriodDays: 7, // 7-day free trial
       })
 
       const { checkoutUrl } = response.data
@@ -80,11 +82,35 @@ export function PlanCard({ plan, isCurrentPlan = false }: PlanCardProps) {
         // Redirect to Stripe Checkout (real mode)
         window.location.href = checkoutUrl
       } else {
-        // Mock mode: simulate successful subscription
+        // Mock mode: simulate successful subscription with trial
         setIsRedirecting(false)
-        // TODO: Update plan store with selected plan
-        // For now, just redirect back to plan page
-        router.push("/settings/plan?success=true")
+        // Calculate trial end date (7 days from now)
+        const trialEndsAt = new Date()
+        trialEndsAt.setDate(trialEndsAt.getDate() + 7)
+        
+        // Update plan store
+        const { setPlan } = usePlanStore.getState()
+        setPlan({
+          planType: plan.planId === "basic" ? "pro" : plan.planId === "advanced" ? "pro" : "enterprise",
+          trialEndsAt: trialEndsAt.toISOString(),
+        })
+        
+        // Update user subscription in profile (mock mode)
+        const { setProfile, profile } = useAuthStore.getState()
+        if (profile) {
+          setProfile({
+            ...profile,
+            subscription: {
+              planId: plan.planId,
+              planName: plan.name,
+              status: "active",
+              trialEndsAt: trialEndsAt.toISOString(),
+            },
+          })
+        }
+        
+        // Redirect to overview page (mock mode: default payment successful)
+        router.push("/overview?success=true&trial=true")
       }
     } catch (error) {
       console.error("Failed to create checkout session:", error)
@@ -99,10 +125,20 @@ export function PlanCard({ plan, isCurrentPlan = false }: PlanCardProps) {
   }
 
   const getButtonLabel = () => {
-    if (isCurrentPlan) return translate("Current Plan", language)
+    if (isCurrentPlan) {
+      // 检查订阅状态（从 profile 或 props 传入）
+      const { profile } = useAuthStore.getState()
+      const subscriptionStatus = profile?.subscription?.status
+      
+      // 如果订阅已取消或过期，显示 "Get Started"
+      if (subscriptionStatus === "canceled" || subscriptionStatus === "expired") {
+        return translate("Get Started", language)
+      }
+      return translate("Current Plan", language)
+    }
     if (plan.planId === "free") return translate("Start for $0", language)
-    if (plan.planId === "basic") return translate("Choose Basic", language)
-    if (plan.planId === "advanced") return translate("Choose Advanced", language)
+    if (plan.planId === "basic") return translate("Start 7-Day Free Trial", language)
+    if (plan.planId === "advanced") return translate("Start 7-Day Free Trial", language)
     if (plan.planId === "enterprise") return translate("Contact Sales", language)
     return translate("Select Plan", language)
   }
@@ -133,6 +169,7 @@ export function PlanCard({ plan, isCurrentPlan = false }: PlanCardProps) {
 
   const priceParts = parsePrice(plan.priceText)
   const isEnterprise = plan.planId === "enterprise"
+  const isPro = plan.planId === "advanced" // Pro plan
 
   return (
     <>
@@ -145,13 +182,20 @@ export function PlanCard({ plan, isCurrentPlan = false }: PlanCardProps) {
           "relative flex h-full flex-col rounded-2xl border bg-card p-6 shadow-sm transition-all hover:shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
           isCurrentPlan
             ? "border-2 border-primary shadow-md"
+            : isPro
+            ? "border-2 border-brand-600 shadow-lg hover:shadow-xl"
             : "border-border hover:border-primary/50"
         )}
         style={
           isCurrentPlan
             ? {
                 boxShadow:
-                  "0 20px 40px rgba(0, 0, 210, 0.12), 0 4px 6px -1px rgb(0 0 0 / 0.04), 0 2px 4px -2px rgb(0 0 0 / 0.04)",
+                  "0 20px 40px rgba(19, 69, 140, 0.12), 0 4px 6px -1px rgb(0 0 0 / 0.04), 0 2px 4px -2px rgb(0 0 0 / 0.04)",
+              }
+            : isPro
+            ? {
+                boxShadow:
+                  "0 0 0 2px rgba(19, 69, 140, 0.2), 0 20px 40px rgba(19, 69, 140, 0.15), 0 4px 6px -1px rgb(0 0 0 / 0.04), 0 2px 4px -2px rgb(0 0 0 / 0.04)",
               }
             : undefined
         }
@@ -208,12 +252,36 @@ export function PlanCard({ plan, isCurrentPlan = false }: PlanCardProps) {
 
         {/* CTA Button */}
         <div className="mt-auto pt-6">
-          {isCurrentPlan ? (
-            <Button type="button" disabled variant="secondary" className="w-full h-12">
-              <Check className="mr-2 h-4 w-4" />
-              {translate("Current Plan", language)}
-            </Button>
-          ) : (
+          {isCurrentPlan ? (() => {
+            const { profile } = useAuthStore.getState()
+            const subscriptionStatus = profile?.subscription?.status
+            const isCanceled = subscriptionStatus === "canceled" || subscriptionStatus === "expired"
+            
+            // 如果订阅已取消，显示 "Get Started" 按钮（可以重新订阅）
+            if (isCanceled) {
+              return (
+                <Button
+                  type="button"
+                  variant="default"
+                  className="w-full h-12"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleSelectPlan()
+                  }}
+                >
+                  {translate("Get Started", language)}
+                </Button>
+              )
+            }
+            
+            // 否则显示当前计划（禁用）
+            return (
+              <Button type="button" disabled variant="secondary" className="w-full h-12">
+                <Check className="mr-2 h-4 w-4" />
+                {translate("Current Plan", language)}
+              </Button>
+            )
+          })() : (
             <Button
               type="button"
               variant="default"

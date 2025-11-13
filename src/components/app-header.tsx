@@ -31,10 +31,9 @@ export function AppHeader() {
       {/* Logo - 点击返回 /overview */}
       <Link
         href="/overview"
-        className="flex items-center space-x-2 text-xl font-bold text-primary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-md px-2 py-1"
+        className="focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-md px-2 py-1 -mt-1"
       >
-        <Logo size={24} />
-        <span>ximu</span>
+        <Logo size={28} showText={true} textSize="3xl" />
       </Link>
 
       <div className="flex items-center space-x-4">

@@ -39,6 +39,7 @@ import { useBrandUIStore } from "@/store/brand-ui.store"
 import { useLanguageStore } from "@/store/language.store"
 import {
   useCreateCompetitor,
+  useCreateCompetitorForProduct,
   useUpdateCompetitor,
   useDeleteCompetitor,
 } from "@/hooks/use-products"
@@ -47,6 +48,7 @@ import { translate } from "@/lib/i18n"
 interface CompetitorsCardProps {
   competitors: Competitor[]
   brandId: string
+  productId?: string | null
 }
 
 const REGIONS = [
@@ -70,13 +72,17 @@ const competitorSchema = z.object({
 
 type CompetitorForm = z.infer<typeof competitorSchema>
 
-export function CompetitorsCard({ competitors, brandId }: CompetitorsCardProps) {
+export function CompetitorsCard({ competitors, brandId, productId }: CompetitorsCardProps) {
   const { markSaved } = useBrandUIStore()
   const { language } = useLanguageStore()
 
-  const createCompetitorMutation = useCreateCompetitor(brandId)
-  const updateCompetitorMutation = useUpdateCompetitor(brandId)
-  const deleteCompetitorMutation = useDeleteCompetitor(brandId)
+  // Use product-based mutation if productId is provided, otherwise use brand-based
+  const createCompetitorForProductMutation = useCreateCompetitorForProduct(productId || null)
+  const createCompetitorMutation = useCreateCompetitor(productId ? null : brandId)
+  const createCompetitorMutationToUse = productId ? createCompetitorForProductMutation : createCompetitorMutation
+  
+  const updateCompetitorMutation = useUpdateCompetitor(brandId, productId)
+  const deleteCompetitorMutation = useDeleteCompetitor(brandId, productId)
 
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -106,14 +112,14 @@ export function CompetitorsCard({ competitors, brandId }: CompetitorsCardProps) 
 
   const handleAddCompetitor = async (data: CompetitorForm) => {
     // Multiple guards to prevent duplicate submission
-    if (createCompetitorMutation.isPending) return
+    if (createCompetitorMutationToUse.isPending) return
     if (isSubmittingRef.current) return
     
     // Set flag immediately to prevent any concurrent calls
     isSubmittingRef.current = true
     
     try {
-      await createCompetitorMutation.mutateAsync({
+      await createCompetitorMutationToUse.mutateAsync({
         name: data.name.trim(),
         product: data.product?.trim() || null,
         region: data.region || null,
@@ -400,10 +406,10 @@ export function CompetitorsCard({ competitors, brandId }: CompetitorsCardProps) 
               </Button>
               <Button
                 type="submit"
-                disabled={createCompetitorMutation.isPending}
+                disabled={createCompetitorMutationToUse.isPending}
                 aria-label="Add competitor"
               >
-                {createCompetitorMutation.isPending ? translate("Adding...", language) : translate("Add Competitor", language)}
+                {createCompetitorMutationToUse.isPending ? translate("Adding...", language) : translate("Add Competitor", language)}
               </Button>
             </DialogFooter>
           </form>

@@ -10,6 +10,12 @@ export const ProfileSchema = z.object({
   email: z.string().email(),
   hasBrand: z.boolean().default(false),
   role: z.enum(["Admin", "Viewer"]).optional(),
+  subscription: z.object({
+    planId: z.enum(["basic", "advanced", "enterprise"]).optional(),
+    planName: z.string().optional(),
+    trialEndsAt: z.string().nullable().optional(), // ISO date string or null
+    status: z.enum(["trial", "active", "canceled", "expired"]).optional(),
+  }).optional(),
 })
 
 export type Profile = z.infer<typeof ProfileSchema>

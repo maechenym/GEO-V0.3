@@ -3,43 +3,32 @@ import { cn } from "@/lib/utils"
 interface LogoProps {
   className?: string
   size?: number
+  showText?: boolean // 是否显示文字（保留此 prop 以兼容现有代码）
+  textSize?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" // 文字大小
 }
 
 /**
- * 品牌Logo组件
- * 带圆角的蓝色正方形，内部有X形状
+ * 品牌Logo组件 - 仅显示文字
  */
-export function Logo({ className, size = 24 }: LogoProps) {
+export function Logo({ 
+  className, 
+  size, // 保留但不使用
+  showText = true, // 默认显示文字
+  textSize = "3xl" // 默认更大的文字
+}: LogoProps) {
+  const textSizeClasses = {
+    sm: "text-sm",
+    md: "text-base",
+    lg: "text-lg",
+    xl: "text-xl",
+    "2xl": "text-2xl",
+    "3xl": "text-3xl"
+  }
+
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={cn("flex-shrink-0", className)}
-      aria-hidden="true"
-    >
-      {/* 带圆角的蓝色正方形 */}
-      <rect
-        x="2"
-        y="2"
-        width="20"
-        height="20"
-        rx="4"
-        ry="4"
-        fill="#0000D2"
-        className="text-brand-600"
-      />
-      {/* X形状 - 两条对角线 */}
-      <path
-        d="M7 7L17 17M17 7L7 17"
-        stroke="white"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <span className={cn("font-bold text-brand-600 flex items-center justify-center", textSizeClasses[textSize], className)}>
+      ximu
+    </span>
   )
 }
 

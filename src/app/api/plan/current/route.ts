@@ -9,8 +9,48 @@ import { NextRequest, NextResponse } from "next/server"
  */
 export async function GET(request: NextRequest) {
   // 检查是否为 Mock 模式
-  if (process.env.NEXT_PUBLIC_USE_MOCK === "true") {
-    // Mock 数据：返回一个试用计划
+  const useMock = process.env.NEXT_PUBLIC_USE_MOCK !== "false"
+  
+  if (useMock) {
+    // 尝试从 Authorization header 获取用户信息
+    const authHeader = request.headers.get("Authorization")
+    const token = authHeader?.replace("Bearer ", "")
+    
+    if (token) {
+      // 提取 email
+      const emailMatch = token.match(/mock_(?:login|signup|magic|google)_token_(.+)/)
+      const email = emailMatch ? emailMatch[1] : token.includes("@") ? token : "test@example.com"
+      
+      // 从 mockUsers 获取用户订阅信息（需要从 handlers.ts 导入，这里简化处理）
+      // 对于 test1@example.com，返回 Basic 计划
+      // 注意：实际应该从数据库或 Stripe 获取订阅信息
+      if (email === "test1@example.com") {
+        const now = new Date()
+        const startDate = new Date(now)
+        startDate.setDate(startDate.getDate() - 7) // 7天前开始
+        
+        // 默认返回 active 状态，实际应该从数据库获取
+        // 如果订阅已取消，endDate 应该是取消后7天
+        const endDate = new Date(now)
+        endDate.setDate(endDate.getDate() + 23) // 23天后结束（30天周期）
+        
+        const remainingDays = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+        
+        return NextResponse.json({
+          plan: {
+            id: "basic",
+            name: "Basic",
+            status: "active", // 实际应该从数据库获取
+            startDate: startDate.toISOString(),
+            endDate: endDate.toISOString(),
+            remainingDays: remainingDays,
+            isTrial: false,
+          },
+        })
+      }
+    }
+    
+    // 默认返回试用计划
     const now = new Date()
     const trialStartDate = new Date(now)
     trialStartDate.setDate(trialStartDate.getDate() - 3) // 3天前开始

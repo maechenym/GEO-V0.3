@@ -6,11 +6,10 @@ import { Button } from "@/components/ui/button"
 import { useBrandUIStore } from "@/store/brand-ui.store"
 import { useLanguageStore } from "@/store/language.store"
 import { ProductListCard } from "@/components/products/ProductListCard"
-import { PersonasCard } from "@/components/products/PersonasCard"
 import { CompetitorsCard } from "@/components/products/CompetitorsCard"
 import { ProductSelectorCard } from "@/components/products/ProductSelectorCard"
 import { UnsavedChangesGuard } from "@/components/common/UnsavedChangesGuard"
-import { useBrand, useProducts, usePersonas, useCompetitors, useUpdateBrand } from "@/hooks/use-products"
+import { useBrand, useProducts, useCompetitorsByProduct, useUpdateBrand } from "@/hooks/use-products"
 import { useQueryClient } from "@tanstack/react-query"
 import { useToast } from "@/hooks/use-toast"
 import { translate } from "@/lib/i18n"
@@ -40,10 +39,11 @@ export default function ProductsSettingsPage() {
   const { data: productsData, isLoading: productsLoading } = useProducts(selectedBrandId)
   const products = productsData?.products || []
 
-  const { data: personasData, isLoading: personasLoading } = usePersonas(selectedBrandId)
-  const personas = personasData?.personas || []
-
-  const { data: competitorsData, isLoading: competitorsLoading } = useCompetitors(selectedBrandId)
+  // Get selected product ID from store
+  const { selectedProductId } = useBrandUIStore()
+  
+  // Fetch competitors based on selected product
+  const { data: competitorsData, isLoading: competitorsLoading } = useCompetitorsByProduct(selectedProductId)
   const competitors = competitorsData?.competitors || []
 
   const handleSaveAllChanges = async () => {
@@ -67,7 +67,7 @@ export default function ProductsSettingsPage() {
   }
 
   // Show loading state
-  if (brandLoading || productsLoading || personasLoading || competitorsLoading) {
+  if (brandLoading || productsLoading || competitorsLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-muted-foreground">{translate("Loading products...", language)}</div>
@@ -98,7 +98,7 @@ export default function ProductsSettingsPage() {
               <div className="-ml-6">
                 <h1 className="text-xl font-semibold text-foreground">{translate("Products", language)}</h1>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {translate("Manage your products, target personas and competitors.", language)}
+                  {translate("Manage your products and competitors.", language)}
                 </p>
               </div>
 
@@ -134,8 +134,8 @@ export default function ProductsSettingsPage() {
                   {/* Brand Name Display */}
                   <div className="rounded-lg border border-gray-200 bg-white p-5">
                     <h2 className="text-sm font-semibold text-gray-900 mb-4">{translate("Brand", language)}</h2>
-                    <div className="text-base font-medium text-gray-900">
-                      {translate(selectedBrand.name || "英业达", language)}
+                      <div className="text-base font-medium text-gray-900">
+                        {translate(selectedBrand.name || "英业达", language)}
                     </div>
                   </div>
 
@@ -146,11 +146,8 @@ export default function ProductsSettingsPage() {
                 {/* Products */}
                 <ProductListCard products={products} brandId={selectedBrand.id} />
 
-                {/* Personas */}
-                <PersonasCard personas={personas} brandId={selectedBrand.id} />
-
                 {/* Competitors */}
-                <CompetitorsCard competitors={competitors} brandId={selectedBrand.id} />
+                <CompetitorsCard competitors={competitors} brandId={selectedBrand.id} productId={selectedProductId} />
               </>
             ) : (
               <div className="rounded-lg border border-gray-200 bg-white p-6">

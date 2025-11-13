@@ -10,7 +10,7 @@
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
-    --primary: 239 100% 41%; /* #0000D2 */
+    --primary: 215 76% 31%; /* #13458c - 品牌主色 */
     --primary-foreground: 0 0% 100%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
@@ -22,7 +22,7 @@
     --destructive-foreground: 0 0% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 239 100% 41%; /* #0000D2 */
+    --ring: 215 76% 31%; /* #13458c - 品牌主色 */
     --radius: 0.5rem;
 
     /* OpenAI 风格 Design Tokens */
@@ -32,8 +32,8 @@
     --text: #111827;
     --text-muted: #6B7280;
 
-    /* 品牌与语义色彩 */
-    --brand: #0000D2;
+    /* 品牌与语义色彩 - 专业配色方案 */
+    --brand: #13458c;
     --good: #16A34A;
     --bad: #DC2626;
     --info: #3B82F6;
@@ -60,7 +60,7 @@
     --card-foreground: 0 0% 98%;
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 0 0% 98%;
-    --primary: 239 100% 41%; /* #0000D2 */
+    --primary: 215 76% 31%; /* #13458c - 品牌主色 */
     --primary-foreground: 0 0% 98%;
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 0 0% 98%;
@@ -72,7 +72,7 @@
     --destructive-foreground: 0 0% 98%;
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 239 100% 41%; /* #0000D2 */
+    --ring: 215 76% 31%; /* #13458c - 品牌主色 */
   }
 }
 

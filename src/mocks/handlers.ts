@@ -15,12 +15,40 @@ const mockUsers: Record<
     id: string
     email: string
     hasBrand: boolean
+    subscription?: {
+      planId?: "basic" | "advanced" | "enterprise"
+      planName?: string
+      trialEndsAt?: string
+      status?: "trial" | "active" | "canceled"
+    }
   }
 > = {
   "test@example.com": {
     id: "u_1",
     email: "test@example.com",
     hasBrand: true,
+  },
+  "test1@example.com": {
+    id: "u_test1",
+    email: "test1@example.com",
+    hasBrand: true, // Waitlist结束后，用户已有品牌
+    subscription: {
+      planId: "basic", // 已有 Basic 订阅
+      planName: "Basic",
+      status: "active", // 可以改为 "canceled" 来测试取消状态
+      trialEndsAt: null,
+    },
+  },
+  "test1@gmail.com": {
+    id: "u_test1_gmail",
+    email: "test1@gmail.com",
+    hasBrand: true, // Waitlist结束后，用户已有品牌
+    subscription: {
+      planId: undefined, // 还未选择订阅计划（等待期结束后的状态）
+      planName: undefined,
+      status: undefined,
+      trialEndsAt: null,
+    },
   },
   "new@example.com": {
     id: "u_2",
@@ -412,6 +440,7 @@ export const handlers = [
           email: newUser.email,
           hasBrand: newUser.hasBrand,
           role: "Admin" as const, // Default to Admin for new mock users
+          subscription: newUser.subscription,
         },
       })
     }
@@ -423,6 +452,7 @@ export const handlers = [
         email: user.email,
         hasBrand: user.hasBrand || (mockBrands[email] ? true : false),
         role: "Admin" as const, // Default to Admin for mock users
+        subscription: user.subscription,
       },
     })
   }),
@@ -797,7 +827,13 @@ export const handlers = [
   // Stripe Checkout Session Mock Handler
   // POST /api/stripe/create-checkout-session
   http.post("*/api/stripe/create-checkout-session", async ({ request }) => {
-    const body = await request.json() as { priceId?: string; planId: string }
+    const body = await request.json() as { 
+      priceId?: string; 
+      planId: string;
+      trialPeriodDays?: number;
+      isUpgrade?: boolean;
+      currentPlanId?: string;
+    }
 
     // Mock mode: 模拟成功创建 checkout session
     await new Promise((resolve) => setTimeout(resolve, 300))
@@ -805,6 +841,75 @@ export const handlers = [
     return HttpResponse.json({
       checkoutUrl: null, // Mock 模式下返回 null，前端会处理为模拟成功
       message: "Mock checkout session created",
+      isUpgrade: body.isUpgrade || false,
+    })
+  }),
+
+  // POST /api/stripe/create-portal-session
+  http.post("*/api/stripe/create-portal-session", async ({ request }) => {
+    // Mock mode: 模拟成功创建 portal session
+    await new Promise((resolve) => setTimeout(resolve, 300))
+
+    return HttpResponse.json({
+      portalUrl: null, // Mock 模式下返回 null
+      message: "Mock portal session created",
+    })
+  }),
+
+  // GET /api/stripe/invoices
+  http.get("*/api/stripe/invoices", async ({ request }) => {
+    // Mock mode: 返回模拟的账单列表
+    await new Promise((resolve) => setTimeout(resolve, 300))
+
+    const now = new Date()
+    const mockInvoices = [
+      {
+        id: "inv_mock_1",
+        number: "INV-2025-001",
+        amount_paid: 29900, // $299.00 in cents
+        amount_due: 0,
+        currency: "usd",
+        status: "paid",
+        created: Math.floor((now.getTime() - 7 * 24 * 60 * 60 * 1000) / 1000), // 7天前
+        period_start: Math.floor((now.getTime() - 7 * 24 * 60 * 60 * 1000) / 1000),
+        period_end: Math.floor((now.getTime() + 23 * 24 * 60 * 60 * 1000) / 1000), // 23天后
+        hosted_invoice_url: null,
+        invoice_pdf: null,
+        description: "Basic Plan - Monthly Subscription",
+      },
+      {
+        id: "inv_mock_2",
+        number: "INV-2024-012",
+        amount_paid: 29900,
+        amount_due: 0,
+        currency: "usd",
+        status: "paid",
+        created: Math.floor((now.getTime() - 37 * 24 * 60 * 60 * 1000) / 1000), // 37天前
+        period_start: Math.floor((now.getTime() - 37 * 24 * 60 * 60 * 1000) / 1000),
+        period_end: Math.floor((now.getTime() - 7 * 24 * 60 * 60 * 1000) / 1000),
+        hosted_invoice_url: null,
+        invoice_pdf: null,
+        description: "Basic Plan - Monthly Subscription",
+      },
+      {
+        id: "inv_mock_3",
+        number: "INV-2024-011",
+        amount_paid: 29900,
+        amount_due: 0,
+        currency: "usd",
+        status: "paid",
+        created: Math.floor((now.getTime() - 67 * 24 * 60 * 60 * 1000) / 1000), // 67天前
+        period_start: Math.floor((now.getTime() - 67 * 24 * 60 * 60 * 1000) / 1000),
+        period_end: Math.floor((now.getTime() - 37 * 24 * 60 * 60 * 1000) / 1000),
+        hosted_invoice_url: null,
+        invoice_pdf: null,
+        description: "Basic Plan - Monthly Subscription",
+      },
+    ]
+
+    return HttpResponse.json({
+      invoices: mockInvoices,
+      has_more: false,
     })
   }),
 
@@ -2119,6 +2224,98 @@ export const handlers = [
         growth: item.growth,
       })),
       generatedAt: new Date().toISOString(),
+    })
+  }),
+
+  // GET /api/plan/current
+  http.get("*/api/plan/current", async ({ request }) => {
+    const authHeader = request.headers.get("Authorization")
+    const token = authHeader?.replace("Bearer ", "")
+
+    if (!token) {
+      return HttpResponse.json(
+        {
+          error: "Unauthorized",
+        },
+        { status: 401 }
+      )
+    }
+
+    // 从 token 中提取 email
+    const emailMatch = token.match(/mock_(?:login|signup|magic|google)_token_(.+)/)
+    const email = emailMatch ? emailMatch[1] : token.includes("@") ? token : "test@example.com"
+
+    // 获取用户订阅信息
+    const user = mockUsers[email]
+    
+    // 如果用户有订阅信息，返回对应的计划
+    if (user?.subscription?.planId) {
+      const now = new Date()
+      const startDate = new Date(now)
+      startDate.setDate(startDate.getDate() - 7) // 7天前开始
+      
+      const endDate = new Date(now)
+      endDate.setDate(endDate.getDate() + 23) // 23天后结束（30天周期）
+      
+      const remainingDays = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      
+      // 映射 planId 到 plan name
+      const planNames: Record<string, string> = {
+        basic: "Basic",
+        advanced: "Pro",
+        enterprise: "Enterprise",
+      }
+      
+      return HttpResponse.json({
+        plan: {
+          id: user.subscription.planId,
+          name: planNames[user.subscription.planId] || user.subscription.planId,
+          status: user.subscription.status || "active",
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          remainingDays: remainingDays,
+          isTrial: user.subscription.status === "trial",
+        },
+      })
+    }
+
+    // 对于 test1@example.com，返回 Basic 计划（模拟已有订阅）
+    if (email === "test1@example.com") {
+      const user = mockUsers[email]
+      const subscriptionStatus = user?.subscription?.status || "active"
+      
+      const now = new Date()
+      const startDate = new Date(now)
+      startDate.setDate(startDate.getDate() - 7) // 7天前开始
+      
+      // 如果已取消，计算取消后的7天试用期结束时间
+      let endDate = new Date(now)
+      if (subscriptionStatus === "canceled" || subscriptionStatus === "expired") {
+        // 取消后可以继续使用7天
+        endDate.setDate(endDate.getDate() + 7)
+      } else {
+        // 正常订阅，30天周期
+        endDate.setDate(endDate.getDate() + 23)
+      }
+      
+      const remainingDays = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      
+      return HttpResponse.json({
+        plan: {
+          id: "basic",
+          name: "Basic",
+          status: subscriptionStatus,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          remainingDays: remainingDays,
+          isTrial: subscriptionStatus === "canceled" || subscriptionStatus === "expired", // 取消后视为试用期
+        },
+      })
+    }
+
+    // 默认返回 null（没有订阅）
+    return HttpResponse.json({
+      plan: null,
     })
   }),
 ]

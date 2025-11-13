@@ -26,10 +26,10 @@ const config = {
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         primary: {
-          DEFAULT: "#0000D2",
+          DEFAULT: "#13458c", // 品牌主色
           foreground: "hsl(var(--primary-foreground))",
-          light: "#3333DB",
-          dark: "#0000A8",
+          light: "#426aa3",
+          dark: "#0f3870",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -56,18 +56,24 @@ const config = {
           foreground: "hsl(var(--card-foreground))",
         },
         // OpenAI 风格 Design Tokens
+        // 品牌色 - 专业配色方案
+        // 100%: #13458c - 深蓝色（主色）
+        // 60%:  #426aa3 - 中等偏深的蓝色
+        // 50%:  #718fba - 中等蓝色
+        // 40%:  #a1b5d1 - 中等偏浅的蓝色
+        // 20%:  #d0dae8 - 最浅的蓝色/浅灰蓝色
         brand: {
-          DEFAULT: "#0000D2",
-          50: "#EBEBFF",
-          100: "#D6D6FF",
-          200: "#ADADFF",
-          300: "#8585FF",
-          400: "#5C5CFF",
-          500: "#3333FF",
-          600: "#0000D2",
-          700: "#0000A3",
-          800: "#000073",
-          900: "#000044",
+          DEFAULT: "#13458c", // 100% - 深蓝色（主色）
+          50: "#d0dae8",      // 20% - 最浅的蓝色/浅灰蓝色
+          100: "#a1b5d1",     // 40% - 中等偏浅的蓝色
+          200: "#718fba",     // 50% - 中等蓝色
+          300: "#426aa3",     // 60% - 中等偏深的蓝色
+          400: "#2d5a96",     // 70% - 中深蓝色（插值）
+          500: "#1f4f89",     // 80% - 深蓝色（插值）
+          600: "#13458c",     // 100% - 深蓝色（主色）
+          700: "#0f3870",     // 更深变体
+          800: "#0b2b54",     // 更深变体
+          900: "#071e38",     // 最深变体
         },
         ink: {
           900: "#111827",

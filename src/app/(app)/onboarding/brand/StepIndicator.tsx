@@ -9,7 +9,7 @@ interface StepIndicatorProps {
 /**
  * 步骤指示器组件
  * 显示 Brand 步骤（现在只有一个步骤）
- * 当前步骤高亮显示（品牌蓝 #0000D2）
+ * 当前步骤高亮显示（品牌蓝 #13458c）
  */
 export function StepIndicator({ currentStep }: StepIndicatorProps) {
   return (

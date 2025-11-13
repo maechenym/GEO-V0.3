@@ -108,7 +108,7 @@ export default function WaitlistPage() {
                 await logout()
                 router.push("/login")
               }}
-              className="bg-[#0000D2] hover:bg-[#0000D2]/90 text-white px-8"
+              className="bg-[#13458c] hover:bg-[#13458c]/90 text-white px-8"
             >
               Logout
             </Button>

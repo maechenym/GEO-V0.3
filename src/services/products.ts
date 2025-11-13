@@ -161,13 +161,32 @@ export async function getCompetitors(brandId: string): Promise<Competitor[]> {
 }
 
 /**
- * Create competitor
+ * Get competitors for a specific product
+ */
+export async function getCompetitorsByProduct(productId: string): Promise<Competitor[]> {
+  const response = await apiClient.get<GetCompetitorsResponse>(`/api/products/${productId}/competitors`)
+  return response.data.competitors
+}
+
+/**
+ * Create competitor for a brand
  */
 export async function createCompetitor(
   brandId: string,
   data: CreateCompetitorRequest
 ): Promise<Competitor> {
   const response = await apiClient.post<CompetitorResponse>(`/api/brands/${brandId}/competitors`, data)
+  return response.data.competitor
+}
+
+/**
+ * Create competitor for a specific product
+ */
+export async function createCompetitorForProduct(
+  productId: string,
+  data: CreateCompetitorRequest
+): Promise<Competitor> {
+  const response = await apiClient.post<CompetitorResponse>(`/api/products/${productId}/competitors`, data)
   return response.data.competitor
 }
 

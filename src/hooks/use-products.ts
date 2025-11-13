@@ -27,6 +27,7 @@ export const queryKeys = {
   products: (brandId: string) => ["products", brandId] as const,
   personas: (brandId: string) => ["personas", brandId] as const,
   competitors: (brandId: string) => ["competitors", brandId] as const,
+  competitorsByProduct: (productId: string) => ["competitors", "product", productId] as const,
 }
 
 /**
@@ -321,6 +322,21 @@ export function useCompetitors(brandId: string | null) {
   })
 }
 
+/**
+ * Get competitors for a specific product
+ */
+export function useCompetitorsByProduct(productId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.competitorsByProduct(productId!),
+    queryFn: async () => {
+      const competitors = await productsApi.getCompetitorsByProduct(productId!)
+      return { competitors }
+    },
+    enabled: !!productId,
+    staleTime: 60 * 1000,
+  })
+}
+
 export function useCreateCompetitor(brandId: string | null) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
@@ -350,7 +366,36 @@ export function useCreateCompetitor(brandId: string | null) {
   })
 }
 
-export function useUpdateCompetitor(brandId: string | null) {
+export function useCreateCompetitorForProduct(productId: string | null) {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+
+  return useMutation({
+    mutationFn: (data: CreateCompetitorRequest) => {
+      if (!productId) {
+        throw new Error("Product ID is required")
+      }
+      return productsApi.createCompetitorForProduct(productId, data)
+    },
+    onSuccess: (newCompetitor) => {
+      // Invalidate and refetch competitors list for this product
+      queryClient.invalidateQueries({ queryKey: queryKeys.competitorsByProduct(productId!) })
+      toast({
+        title: "Competitor Added",
+        description: "Competitor has been added successfully",
+      })
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to Add Competitor",
+        description: error?.response?.data?.error || error?.message || "Please try again",
+        variant: "destructive",
+      })
+    },
+  })
+}
+
+export function useUpdateCompetitor(brandId: string | null, productId?: string | null) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
 
@@ -358,7 +403,13 @@ export function useUpdateCompetitor(brandId: string | null) {
     mutationFn: ({ id, data }: { id: string; data: UpdateCompetitorRequest }) =>
       productsApi.updateCompetitor(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.competitors(brandId!) })
+      // Invalidate both brand and product competitors queries
+      if (brandId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.competitors(brandId) })
+      }
+      if (productId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.competitorsByProduct(productId) })
+      }
       toast({
         title: "Competitor Updated",
         description: "Competitor has been updated successfully",
@@ -374,14 +425,20 @@ export function useUpdateCompetitor(brandId: string | null) {
   })
 }
 
-export function useDeleteCompetitor(brandId: string | null) {
+export function useDeleteCompetitor(brandId: string | null, productId?: string | null) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
 
   return useMutation({
     mutationFn: (id: string) => productsApi.deleteCompetitor(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.competitors(brandId!) })
+      // Invalidate both brand and product competitors queries
+      if (brandId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.competitors(brandId) })
+      }
+      if (productId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.competitorsByProduct(productId) })
+      }
       toast({
         title: "Competitor Deleted",
         description: "Competitor has been removed successfully",

@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label"
 import { FormMessage } from "@/components/ui/form-message"
 
 const loginSchema = z.object({
-  email: z.string().email("请输入有效的邮箱地址"),
+  email: z.string().min(1, "请输入邮箱地址").email("请输入有效的邮箱地址"),
   password: z.string().min(1, "请输入密码"),
 })
 
@@ -46,42 +46,84 @@ export default function LoginPage() {
     handleSubmit,
     formState: { errors, isSubmitting },
     setError,
+    watch,
+    getValues,
   } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
+    mode: "onChange",
   })
+
+  // Watch form values for debugging
+  const emailValue = watch("email")
+  const passwordValue = watch("password")
+  
+  useEffect(() => {
+    console.log("[Login] Form values changed:", { email: emailValue, password: passwordValue ? "***" : "" })
+  }, [emailValue, passwordValue])
 
   // 已登录且有品牌的用户重定向到 overview
   // 已登录但无品牌的用户可以继续访问登录页（可能需要重新登录）
+  // 排除 test1@example.com 和 test1@gmail.com，它们应该跳转到 /analysis-results
   useEffect(() => {
     if (token && profile && profile.hasBrand) {
-      router.push("/overview")
+      const email = profile.email
+      if (email === "test1@example.com" || email === "test1@gmail.com") {
+        router.push("/analysis-results")
+      } else {
+        router.push("/overview")
+      }
     }
   }, [token, profile, router])
 
   // Login 提交
   const onLogin = async (data: LoginForm) => {
     try {
+      console.log("[Login] Attempting login with email:", data.email, "password:", data.password ? "***" : "empty")
+      
+      if (!data.email || !data.password) {
+        console.error("[Login] Email or password is empty")
+        setError("root", { message: "请输入邮箱和密码" })
+        return
+      }
+      
       const response = await apiClient.post("/api/auth/login", { 
         email: data.email,
         password: data.password 
       })
+      console.log("[Login] API response:", response.data)
       const result = LoginResponseSchema.parse(response.data)
 
       if (result.ok) {
+        console.log("[Login] Login successful, token received")
         // 保存 token，建立会话
         await loginWithToken(result.token)
+        console.log("[Login] Token saved, loading profile...")
         
         // 调用 GET /api/auth/session 拉取 profile.hasBrand
         const profile = await loadProfile()
+        console.log("[Login] Profile loaded:", profile)
+
+        // 特殊处理：test1@example.com 或 test1@gmail.com 跳转到分析结果页面
+        if (data.email === "test1@example.com" || data.email === "test1@gmail.com") {
+          console.log("[Login] Redirecting test1 user to /analysis-results")
+          router.push("/analysis-results")
+          return
+        }
 
         // 根据 hasBrand 决定跳转
         if (!profile.hasBrand) {
+          console.log("[Login] No brand, redirecting to /onboarding/brand")
           router.push("/onboarding/brand")
         } else {
+          console.log("[Login] Has brand, redirecting to /overview")
           router.push("/overview")
         }
+      } else {
+        console.error("[Login] Login failed, result.ok is false")
+        setError("root", { message: "登录失败，请重试" })
       }
     } catch (error: unknown) {
+      console.error("[Login] Error during login:", error)
       const message = error && typeof error === "object" && "message" in error
         ? String(error.message)
         : "登录失败，请重试"
@@ -118,7 +160,19 @@ export default function LoginPage() {
           <p className="text-muted-foreground">登录你的账户</p>
         </div>
 
-        <form onSubmit={handleSubmit(onLogin)} className="space-y-6">
+        <form 
+          onSubmit={handleSubmit(
+            (data) => {
+              console.log("[Login] Form validation passed, calling onLogin with data:", data)
+              onLogin(data)
+            },
+            (errors) => {
+              console.error("[Login] Form validation failed:", errors)
+              console.log("[Login] Current form values:", getValues())
+            }
+          )} 
+          className="space-y-6"
+        >
           <div className="space-y-2">
             <Label htmlFor="email">
               Email <span className="text-destructive">*</span>

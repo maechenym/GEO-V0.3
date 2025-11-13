@@ -1042,7 +1042,7 @@ export default function VisibilityPage() {
                               const value = cell?.mentionRate ?? 0
                               const intensity = heatmapMaxRate > 0 ? value / heatmapMaxRate : 0
                               const background =
-                                value > 0 ? `rgba(0, 0, 210, ${(0.15 + intensity * 0.65).toFixed(2)})` : INK_COLORS[100]
+                                value > 0 ? `rgba(19, 69, 140, ${(0.15 + intensity * 0.65).toFixed(2)})` : INK_COLORS[100]
 
                               return (
                                 <Tooltip key={key}>

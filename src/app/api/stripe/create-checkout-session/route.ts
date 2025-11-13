@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { priceId, planId } = body
+    const { priceId, planId, trialPeriodDays, isUpgrade, currentPlanId } = body
 
     if (!priceId && planId !== "free") {
       return NextResponse.json(
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     const origin = request.headers.get("origin") || "http://localhost:3000"
 
     // 创建 Checkout Session
-    const session = await stripe.checkout.sessions.create({
+    const sessionConfig: Stripe.Checkout.SessionCreateParams = {
       mode: "subscription",
       payment_method_types: ["card"],
       line_items: [
@@ -64,12 +64,27 @@ export async function POST(request: NextRequest) {
           quantity: 1,
         },
       ],
-      success_url: `${origin}/settings/plan?success=true`,
-      cancel_url: `${origin}/settings/plan?canceled=true`,
+      success_url: isUpgrade
+        ? `${origin}/settings/plan?upgraded=true&plan=${planId}`
+        : `${origin}/overview?success=true&trial=true`,
+      cancel_url: isUpgrade
+        ? `${origin}/settings/plan?canceled=true`
+        : `${origin}/subscribe?canceled=true`,
       metadata: {
         planId: planId,
+        isUpgrade: isUpgrade ? "true" : "false",
+        currentPlanId: currentPlanId || "",
       },
-    })
+    }
+
+    // Add trial period if specified and not an upgrade
+    if (!isUpgrade && trialPeriodDays !== undefined && trialPeriodDays > 0) {
+      sessionConfig.subscription_data = {
+        trial_period_days: trialPeriodDays,
+      }
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionConfig)
 
     return NextResponse.json({
       checkoutUrl: session.url,

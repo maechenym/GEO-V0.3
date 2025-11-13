@@ -34,10 +34,9 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
             {/* Logo - 点击跳转到首页 */}
             <Link
               href="/"
-              className="mb-6 block px-3 py-2 flex items-center gap-2 text-xl font-bold text-primary hover:text-primary/80 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-md transition-colors"
+              className="mb-6 block px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-md transition-colors -mt-1"
             >
-              <Logo size={24} />
-              <span>ximu</span>
+              <Logo size={28} showText={true} textSize="3xl" />
             </Link>
             
             {/* 步骤指示器 */}
@@ -53,10 +52,9 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
             <div className="px-4 pt-4 pb-2">
               <Link
                 href="/"
-                className="inline-flex items-center gap-2 px-3 py-2 text-xl font-bold text-primary hover:text-primary/80 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-md transition-colors"
+                className="inline-flex items-center px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-md transition-colors -mt-1"
               >
-                <Logo size={24} />
-                <span>ximu</span>
+                <Logo size={28} showText={true} textSize="3xl" />
               </Link>
             </div>
             

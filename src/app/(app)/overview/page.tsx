@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { ArrowUp, ArrowDown, Download, HelpCircle, ChevronLeft, ChevronRight, Plus, X } from "lucide-react"
+import { ArrowUp, ArrowDown, Download, HelpCircle, ChevronLeft, ChevronRight, Plus, X, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -13,6 +13,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   Select,
   SelectContent,
@@ -51,7 +59,7 @@ import { translate, getTooltipContent } from "@/lib/i18n"
 import { useBrandUIStore } from "@/store/brand-ui.store"
 
 // Chart colors - use brand color for all lines (OpenAI style)
-import { CHART_PRIMARY_COLOR, CHART_COLORS as DESIGN_CHART_COLORS, INK_COLORS } from "@/lib/design-tokens"
+import { CHART_PRIMARY_COLOR, CHART_COLORS as DESIGN_CHART_COLORS, INK_COLORS, BRAND_COLORS } from "@/lib/design-tokens"
 
 const CHART_COLORS = [
   CHART_PRIMARY_COLOR, // brand color
@@ -211,6 +219,8 @@ export default function OverviewPage() {
   const [selectedModel, setSelectedModel] = useState<string>("all")
   const MAX_VISIBLE_BRANDS = 6
   const [visibleBrands, setVisibleBrands] = useState<Set<string>>(new Set())
+  const [selectedCompetitors, setSelectedCompetitors] = useState<string[]>([])
+  const [addCompetitorDialogOpen, setAddCompetitorDialogOpen] = useState(false)
 
   // Get user registered date (fallback to 30 days ago)
   const minDate = useMemo(() => getUserRegisteredAt(30), [])
@@ -309,34 +319,66 @@ export default function OverviewPage() {
     return selfBrand?.name || null
   }, [apiData])
 
-  // Use API data - prepare chart data for self brand only
-  // Note: API already filters data by date range and adjusts dates (subtracts 1 day)
-  // So we should use all trend data returned by API directly
+  // Use API data - prepare chart data for self brand and selected competitors
   const chartData = useMemo(() => {
     if (!apiData?.brandInfluence?.trend) return []
     
-    // API already returns filtered data based on the selected date range
-    // For 1day mode: API returns last 2 days
-    // For multi-day mode: API returns all days in the selected range
-    // API also adjusts dates (subtracts 1 day) because file dates represent the collection date
-    // So we should use all trend data returned by API directly
+    // Get self brand trend data
+    const selfTrend = apiData.brandInfluence.trend
     
-    // Debug: Log the trend data
-    console.log('[Overview] Chart data - trend count:', apiData.brandInfluence.trend.length)
-    console.log('[Overview] Chart data - dates:', apiData.brandInfluence.trend.map(t => t.date))
-    console.log('[Overview] Selected date range:', formatDateShanghai(dateRange.start), 'to', formatDateShanghai(dateRange.end))
+    // Get competitor trends if available (from apiData directly)
+    const competitorTrends = (apiData as any)?.competitorTrends || {}
     
-    // Create chart data structure - use all data from API
-    const chartDataResult = apiData.brandInfluence.trend.map((item) => {
-      return {
-        date: format(new Date(item.date), "MM/dd"),
+    // Create a map of dates to combine all trends
+    const dateMap = new Map<string, { date: string; fullDate: string; brandInfluence: number; [key: string]: any }>()
+    
+    // Add self brand data
+    selfTrend.forEach((item) => {
+      const dateKey = format(new Date(item.date), "MM/dd")
+      dateMap.set(dateKey, {
+        date: dateKey,
         fullDate: item.date,
         brandInfluence: item.brandInfluence || 0,
+      })
+    })
+    
+    // Add selected competitor data
+    selectedCompetitors.forEach((competitorName) => {
+      const competitorTrend = competitorTrends[competitorName]
+      if (competitorTrend) {
+        competitorTrend.forEach((item) => {
+          const dateKey = format(new Date(item.date), "MM/dd")
+          const existing = dateMap.get(dateKey)
+          if (existing) {
+            existing[competitorName] = item.brandInfluence || 0
+          } else {
+            dateMap.set(dateKey, {
+              date: dateKey,
+              fullDate: item.date,
+              brandInfluence: 0,
+              [competitorName]: item.brandInfluence || 0,
+            })
+          }
+        })
       }
     })
     
+    // Convert map to array and sort by date
+    const chartDataResult = Array.from(dateMap.values()).sort((a, b) => {
+      return new Date(a.fullDate).getTime() - new Date(b.fullDate).getTime()
+    })
+    
     return chartDataResult
-  }, [apiData, dateRange])
+  }, [apiData, dateRange, selectedCompetitors])
+  
+  // Get available competitors (excluding self brand)
+  const availableCompetitors = useMemo(() => {
+    if (!apiData?.ranking || !selfBrandName) return []
+    return apiData.ranking
+      .filter((c) => !c.isSelf && c.name !== selfBrandName)
+      .map((c) => c.name)
+      .filter((name) => !selectedCompetitors.includes(name))
+  }, [apiData?.ranking, selfBrandName, selectedCompetitors])
 
   const data: OverviewData | null = useMemo(() => {
     if (!apiData) return null
@@ -720,29 +762,46 @@ export default function OverviewPage() {
                     </div>
                   </div>
                   <div>
-                    {/* Current Score with Change Rate */}
-                    <div className="mb-3 flex items-baseline gap-4">
-                      <span className="text-2xl font-semibold text-ink-900">{Math.round(data.brandInfluence.current)}</span>
-                      {/* Change Rate Section - Gray text, no colors */}
-                      <div className="flex items-center gap-1.5">
-                        {data.brandInfluence.changeRate > 0 ? (
-                          <>
-                            <ArrowUp className="h-3 w-3 text-ink-500" />
-                            <span className="text-sm font-medium text-ink-600">
-                              {Math.abs(data.brandInfluence.changeRate).toFixed(1)}
-                            </span>
-                          </>
-                        ) : data.brandInfluence.changeRate < 0 ? (
-                          <>
-                            <ArrowDown className="h-3 w-3 text-ink-500" />
-                            <span className="text-sm font-medium text-ink-600">
-                              {Math.abs(data.brandInfluence.changeRate).toFixed(1)}
-                            </span>
-                          </>
-                        ) : (
-                          <span className="text-sm font-medium text-ink-500">0</span>
+                    {/* Add Competitor Button and Selected Competitors */}
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap flex-1">
+                        {/* Self Brand - Always shown first, no delete button */}
+                        {selfBrandName && (
+                          <Badge
+                            variant="secondary"
+                            className="bg-brand-600 text-white border-brand-600 flex items-center gap-1.5"
+                          >
+                            <span className="text-xs font-medium">{selfBrandName}</span>
+                          </Badge>
                         )}
+                        {/* Selected Competitors - Can be removed */}
+                        {selectedCompetitors.map((competitor) => (
+                          <Badge
+                            key={competitor}
+                            variant="secondary"
+                            className="bg-brand-50 text-brand-700 border-brand-200 flex items-center gap-1.5"
+                          >
+                            <span className="text-xs">{competitor}</span>
+                            <button
+                              onClick={() => {
+                                setSelectedCompetitors(selectedCompetitors.filter((c) => c !== competitor))
+                              }}
+                              className="hover:bg-brand-100 rounded-full p-0.5 transition-colors"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        ))}
                       </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAddCompetitorDialogOpen(true)}
+                        className="h-8 px-3 text-xs border-brand-300 text-brand-700 hover:bg-brand-50 flex-shrink-0"
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1" />
+                        {language === "zh-TW" ? "添加競品" : "Add Competitor"}
+                      </Button>
                     </div>
                     {/* Brand Influence Chart */}
                     <div className="h-[265px] w-full mt-6">
@@ -787,11 +846,40 @@ export default function OverviewPage() {
                           <Line
                             type="linear"
                             dataKey="brandInfluence"
-                            stroke={CHART_PRIMARY_COLOR}
+                            stroke={BRAND_COLORS[600]}
                             strokeWidth={2.5}
                             dot={false}
-                            activeDot={{ r: 5, fill: CHART_PRIMARY_COLOR, stroke: "white", strokeWidth: 2 }}
+                            activeDot={{ r: 5, fill: BRAND_COLORS[600], stroke: "white", strokeWidth: 2 }}
+                            name={selfBrandName || "Your Brand"}
                           />
+                          {/* Competitor trend lines */}
+                          {selectedCompetitors.map((competitor, index) => {
+                            // Use distinct colors for competitors - different from brand color
+                            const competitorColors = [
+                              "#3B82F6",  // Blue
+                              "#16A34A", // Green
+                              "#F59E0B", // Orange/Amber
+                              "#EF4444", // Red
+                              "#8B5CF6", // Purple
+                              "#EC4899", // Pink
+                              "#14B8A6", // Teal
+                              "#F97316", // Orange
+                            ]
+                            const color = competitorColors[index % competitorColors.length]
+                            return (
+                              <Line
+                                key={competitor}
+                                type="linear"
+                                dataKey={competitor}
+                                stroke={color}
+                                strokeWidth={2}
+                                dot={false}
+                                activeDot={{ r: 4, fill: color, stroke: "white", strokeWidth: 2 }}
+                                strokeDasharray={index > 3 ? "5 5" : undefined}
+                                name={competitor}
+                              />
+                            )
+                          })}
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
@@ -799,6 +887,53 @@ export default function OverviewPage() {
                 </div>
               </FadeUp>
 
+              {/* Add Competitor Dialog */}
+              <Dialog open={addCompetitorDialogOpen} onOpenChange={setAddCompetitorDialogOpen}>
+                <DialogContent className="sm:max-w-[425px]">
+                  <DialogHeader>
+                    <DialogTitle>
+                      {language === "zh-TW" ? "添加競品品牌" : "Add Competitor Brand"}
+                    </DialogTitle>
+                    <DialogDescription>
+                      {language === "zh-TW"
+                        ? "選擇要添加到趨勢圖中的競品品牌"
+                        : "Select competitor brands to add to the trend chart"}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="py-4">
+                    {availableCompetitors.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        {language === "zh-TW"
+                          ? "沒有可用的競品品牌"
+                          : "No available competitor brands"}
+                      </p>
+                    ) : (
+                      <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                        {availableCompetitors.map((competitor) => (
+                          <button
+                            key={competitor}
+                            onClick={() => {
+                              setSelectedCompetitors([...selectedCompetitors, competitor])
+                              setAddCompetitorDialogOpen(false)
+                            }}
+                            className="w-full text-left px-4 py-2 rounded-lg border border-ink-200 hover:bg-brand-50 hover:border-brand-300 transition-colors"
+                          >
+                            <span className="text-sm font-medium text-ink-900">{competitor}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setAddCompetitorDialogOpen(false)}
+                    >
+                      {language === "zh-TW" ? "取消" : "Cancel"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
 
             {/* Right Column - Competitor Ranking */}

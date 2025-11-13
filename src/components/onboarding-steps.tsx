@@ -20,7 +20,7 @@ interface OnboardingStepsProps {
 /**
  * Onboarding 步骤指示器
  * 显示 Brand → Prompt → Plan 三个步骤
- * 当前步骤高亮显示（品牌蓝 #0000D2）
+ * 当前步骤高亮显示（品牌蓝 #13458c）
  */
 export function OnboardingSteps({ currentStep }: OnboardingStepsProps) {
   return (

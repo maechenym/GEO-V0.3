@@ -120,7 +120,7 @@ export default function BrandOnboardingPage() {
               type="button"
               onClick={handleJoinWaitlist}
               disabled={isSubmitting || !basic?.brandName || !basic?.productName}
-              className="bg-[#0000D2] hover:bg-[#0000D2]/90 text-white px-8"
+              className="bg-[#13458c] hover:bg-[#13458c]/90 text-white px-8"
             >
               {isSubmitting ? "Processing..." : "Join Waitlist"}
             </Button>
@@ -144,7 +144,7 @@ export default function BrandOnboardingPage() {
               <Button
                 type="button"
                 onClick={handleGotIt}
-                className="bg-[#0000D2] hover:bg-[#0000D2]/90 text-white px-8"
+                className="bg-[#13458c] hover:bg-[#13458c]/90 text-white px-8"
               >
                 Got it
               </Button>

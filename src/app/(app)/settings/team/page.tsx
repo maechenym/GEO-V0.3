@@ -104,7 +104,7 @@ export default function TeamSettingsPage() {
   const loadTeamMembers = async () => {
     setIsLoadingMembers(true)
     try {
-      const response = await apiClient.get("/team")
+      const response = await apiClient.get("/api/team")
       console.log("Team API response:", response.data)
       
       // 尝试解析响应数据
@@ -188,7 +188,7 @@ export default function TeamSettingsPage() {
 
     setIsInviting(true)
     try {
-      const response = await apiClient.post("/team/invite", formData)
+      const response = await apiClient.post("/api/team/invite", formData)
       const data = InviteMemberResponseSchema.parse(response.data)
 
       addMember(data.member)
@@ -210,7 +210,7 @@ export default function TeamSettingsPage() {
 
   const handleUpdateRole = async (id: string, role: "Admin" | "Viewer") => {
     try {
-      const response = await apiClient.patch(`/team/${id}`, { role })
+      const response = await apiClient.patch(`/api/team/${id}`, { role })
       const data = UpdateMemberRoleResponseSchema.parse(response.data)
 
       updateRole(id, data.member.role)

@@ -63,11 +63,10 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
       {/* Logo - 点击跳转到 /overview */}
       <Link
         href="/overview"
-        className="mb-6 px-3 py-2 flex items-center gap-2 text-xl font-bold text-brand-600 hover:text-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 rounded-lg transition-colors duration-200"
+        className="mb-6 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 rounded-lg transition-colors duration-200 -mt-1"
         aria-label="Go to overview page"
       >
-        <Logo size={24} />
-        <span>ximu</span>
+        <Logo size={28} showText={true} textSize="3xl" />
       </Link>
 
       {Object.entries(groupedNav).map(([group, items]) => (
@@ -87,18 +86,16 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
                   onClick={onNavigate}
                   className={cn(
                     "group flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
-                    "hover:bg-ink-50 hover:text-ink-900",
-                    "focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2",
-                    isActive && "bg-brand-600 text-white hover:bg-brand-700",
-                    !isActive && "text-ink-700"
+                    "focus:outline-none",
+                    isActive ? "bg-brand-50 hover:bg-brand-50" : "hover:bg-brand-50",
+                    "text-ink-700"
                   )}
                   aria-current={isActive ? "page" : undefined}
                   aria-label={`Navigate to ${item.title}`}
                 >
                   <Icon
                     className={cn(
-                      "mr-3 h-5 w-5 flex-shrink-0 transition-colors",
-                      isActive ? "text-white" : "text-ink-500 group-hover:text-ink-700"
+                      "mr-3 h-5 w-5 flex-shrink-0 transition-colors text-ink-700"
                     )}
                     aria-hidden="true"
                   />

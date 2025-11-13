@@ -31,15 +31,21 @@ export async function GET(request: NextRequest) {
     const email = emailMatch ? emailMatch[1] : token.includes("@") ? token : "test@example.com"
 
     // Mock user data - 默认给 test@example.com 设置 hasBrand: true
-    const hasBrand = email === "test@example.com"
+    const hasBrand = email === "test@example.com" || email === "test1@example.com" || email === "test1@gmail.com"
+    
+    // test1@example.com 或 test1@gmail.com 是waitlist结束后的用户
+    const subscription = email === "test1@example.com" || email === "test1@gmail.com"
+      ? { planId: undefined, status: undefined }
+      : undefined
     
     return NextResponse.json({
       ok: true,
       profile: {
-        id: `u_${email === "test@example.com" ? "1" : Date.now()}`,
+        id: `u_${email === "test@example.com" ? "1" : (email === "test1@example.com" || email === "test1@gmail.com") ? "test1" : Date.now()}`,
         email: email,
         hasBrand: hasBrand,
         role: "Admin" as const,
+        subscription: subscription,
       },
     })
   }

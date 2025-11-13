@@ -17,9 +17,8 @@ export default function HomePage() {
       {/* Header */}
       <header className="border-b border-border">
         <div className="container mx-auto flex h-16 items-center justify-between px-6">
-          <Link href="/" className="flex items-center gap-2 text-xl font-bold text-primary">
-            <Logo size={24} />
-            <span>ximu</span>
+          <Link href="/" className="flex items-center gap-2 text-xl font-bold text-primary -mt-1">
+            <Logo size={24} showText={true} textSize="3xl" />
           </Link>
           <div className="flex items-center gap-4">
             <Link href="/login">

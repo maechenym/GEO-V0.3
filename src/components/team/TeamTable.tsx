@@ -94,7 +94,7 @@ export function TeamTable({ members, onUpdateRole }: TeamTableProps) {
     if (!deleteMemberId || !memberToDelete) return
 
     try {
-      const response = await apiClient.delete(`/team/${deleteMemberId}`)
+      const response = await apiClient.delete(`/api/team/${deleteMemberId}`)
       const data = DeleteMemberResponseSchema.parse(response.data)
 
       if (data.ok) {

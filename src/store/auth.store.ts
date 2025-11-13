@@ -49,17 +49,22 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true })
         try {
           const response = await apiClient.get("/api/auth/session")
+          console.log("[AuthStore] Session API response:", response.data)
           const data = SessionResponseSchema.parse(response.data)
+          console.log("[AuthStore] Parsed session data:", data)
           
           if (data.ok && data.profile) {
+            console.log("[AuthStore] Setting profile:", data.profile)
             set({
               profile: data.profile,
               isLoading: false,
             })
             return data.profile
           }
+          console.error("[AuthStore] Session response not ok or no profile:", data)
           throw new Error("Failed to load profile")
         } catch (error) {
+          console.error("[AuthStore] Error loading profile:", error)
           set({ isLoading: false, profile: null })
           // 如果 token 无效，清除状态（但不抛出错误，避免无限重试）
           if (error && typeof error === "object" && "response" in error) {

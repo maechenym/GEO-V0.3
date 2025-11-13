@@ -267,7 +267,7 @@ export default function SourcesPage() {
     })
   }
 
-  const sourceColorPalette = ["#2563EB", "#0000D2", "#38BDF8", "#6366F1", "#22C55E", "#D946EF", "#F97316"] // Keep original palette for chart variety
+  const sourceColorPalette = ["#2563EB", "#13458c", "#38BDF8", "#6366F1", "#22C55E", "#D946EF", "#F97316"] // Keep original palette for chart variety
 
   const topSourceDistribution = useMemo(() => {
     if (!sourceRows) return []
