@@ -2,7 +2,18 @@ import { NextResponse } from "next/server"
 import path from "path"
 import { promises as fs } from "fs"
 import { format, subDays } from "date-fns"
-import type { SentimentKPIs, SentimentRankingItem, SentimentTrendData, RiskTopic, SentimentData } from "@/types/sentiment"
+import type {
+  SentimentKPIs,
+  SentimentRankingItem,
+  SentimentTrendData,
+  RiskTopic,
+  SentimentData,
+  SentimentSourceDistribution,
+  SentimentTopicSummary,
+} from "@/types/sentiment"
+import { getDomainCategory } from "@/lib/source-categories"
+
+const SELF_BRAND_CANDIDATES = ["英业达", "Inventec"]
 
 const MODEL_KEY_MAP: Record<string, string> = {
   all: "overall",
@@ -17,6 +28,19 @@ const getModelKey = (modelParam: string | null): string => {
   return MODEL_KEY_MAP[normalized] || "overall"
 }
 
+const resolveSelfBrandKey = (source: any): string => {
+  if (!source || typeof source !== "object") {
+    return SELF_BRAND_CANDIDATES[0]
+  }
+  const mentionRateKeys = Object.keys(source.mention_rate || {})
+  for (const candidate of SELF_BRAND_CANDIDATES) {
+    if (mentionRateKeys.includes(candidate)) {
+      return candidate
+    }
+  }
+  return SELF_BRAND_CANDIDATES[0]
+}
+
 const getModelData = (dayData: any, modelKey: string): any => {
   if (!dayData || typeof dayData !== "object") return null
   const modelData = dayData?.[modelKey]
@@ -26,48 +50,60 @@ const getModelData = (dayData: any, modelKey: string): any => {
   return dayData?.overall || null
 }
 
+const getSentimentBreakdown = (scoreRaw: number) => {
+  const score = Math.max(0, Math.min(1, typeof scoreRaw === "number" ? scoreRaw : parseFloat(String(scoreRaw)) || 0))
+
+  let positive = 0
+  let neutral = 0
+  let negative = 0
+
+  if (score >= 0.7) {
+    positive = Math.min(100, ((score - 0.7) / 0.3) * 60 + 40)
+    neutral = Math.max(0, (1 - score) * 40)
+    negative = Math.max(0, 100 - positive - neutral)
+  } else if (score >= 0.3) {
+    neutral = Math.min(100, ((score - 0.3) / 0.4) * 40 + 60)
+    positive = Math.max(0, ((score - 0.3) / 0.4) * 30)
+    negative = Math.max(0, ((0.7 - score) / 0.4) * 30)
+    const total = positive + neutral + negative
+    if (total > 0) {
+      positive = (positive / total) * 100
+      neutral = (neutral / total) * 100
+      negative = 100 - positive - neutral
+    }
+  } else {
+    negative = Math.min(100, ((0.3 - score) / 0.3) * 60 + 40)
+    neutral = Math.max(0, (score / 0.3) * 40)
+    positive = Math.max(0, 100 - negative - neutral)
+  }
+
+  return {
+    positive: parseFloat(positive.toFixed(1)),
+    neutral: parseFloat(neutral.toFixed(1)),
+    negative: parseFloat(negative.toFixed(1)),
+  }
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
-    const startDate = searchParams.get("startDate") || "2025-10-31"
-    const endDate = searchParams.get("endDate") || "2025-11-06"
+    const startDate = searchParams.get("startDate") || "2025-11-08"
+    const endDate = searchParams.get("endDate") || "2025-11-14"
     const productId = searchParams.get("productId")
     const modelParam = searchParams.get("model")
     const modelKey = getModelKey(modelParam)
 
-    // 读取JSON文件
+    // 读取JSON文件 - 只使用新文件
     const projectRoot = process.cwd()
-    // 优先从项目目录读取（生产环境可用）
-    const projectDataPath = path.resolve(projectRoot, "data", "all_brands_results_20251106_075334.json")
-    const jsonFilePath = path.resolve(projectRoot, "..", "all_brands_results_20251106_075334.json")
-    const downloadsPath = path.resolve("/Users/yimingchen/Downloads", "all_brands_results_20251106_075334.json")
-    const altPath = path.resolve(projectRoot, "documents", "all_brands_results_20251106_075334.json")
+    const dataPath = path.resolve(projectRoot, "data", "all_products_results_20251114_021851.json")
     
     let fileContents: string = ""
-    let loadedPath: string | null = null
     
-    // 按优先级尝试读取文件（项目目录优先，适用于生产环境）
-    const pathsToTry = [
-      projectDataPath,  // 1. 项目 data 目录（生产环境优先）
-      downloadsPath,    // 2. Downloads文件夹（开发环境）
-      jsonFilePath,     // 3. 项目上级目录
-      altPath,          // 4. documents目录
-    ]
-    
-    for (const tryPath of pathsToTry) {
-      try {
-        fileContents = await fs.readFile(tryPath, "utf8")
-        loadedPath = tryPath
-        console.log(`[Sentiment API] Successfully loaded JSON from: ${tryPath}`)
-        break
-      } catch (error: any) {
-        // 继续尝试下一个路径
-        continue
-      }
-    }
-    
-    if (!loadedPath || !fileContents) {
-      console.error("[Sentiment API] Error reading JSON file from all paths:", pathsToTry)
+    try {
+      fileContents = await fs.readFile(dataPath, "utf8")
+      console.log(`[Sentiment API] Successfully loaded JSON from: ${dataPath}`)
+    } catch (error: any) {
+      console.error(`[Sentiment API] Error reading JSON file from: ${dataPath}`, error)
       return NextResponse.json(
         { error: "Failed to read data file" },
         { status: 500 }
@@ -77,7 +113,8 @@ export async function GET(request: Request) {
     const allData = JSON.parse(fileContents)
     
     // 确定要使用的产品名称
-    let productName = "英业达 (Inventec) 机架解决方案" // 默认产品
+    // 新格式: "品牌名 (英文名) | 产品名"
+    let productName = "英业达 (Inventec) | 笔记本电脑代工" // 默认产品
     
     // 如果提供了productId，尝试从产品数据中获取产品名称
     if (productId) {
@@ -93,7 +130,19 @@ export async function GET(request: Request) {
         if (productResponse.ok) {
           const productData = await productResponse.json()
           if (productData.product && productData.product.name) {
-            productName = productData.product.name
+            // 从产品名称构建JSON键名格式
+            const productNameFromAPI = productData.product.name
+            const brandName = productData.product.brand?.name || "英业达 (Inventec)"
+            
+            // 构建新格式的键名: "品牌名 | 产品名"
+            if (productNameFromAPI.includes("|")) {
+              productName = productNameFromAPI
+            } else if (productNameFromAPI.includes(brandName)) {
+              productName = productNameFromAPI.replace(/\s+/, " | ")
+            } else {
+              productName = `${brandName} | ${productNameFromAPI}`
+            }
+            
             console.log(`[Sentiment API] Using product: ${productName} for productId: ${productId}`)
           }
         } else {
@@ -105,7 +154,21 @@ export async function GET(request: Request) {
       }
     }
     
-    const productData = allData[productName]
+    // 如果直接匹配失败，尝试查找包含该产品名的键
+    let productData = allData[productName]
+    
+    if (!productData && productName.includes("|")) {
+      // 尝试模糊匹配：查找包含品牌和产品名的键
+      const [brandPart, productPart] = productName.split("|").map(s => s.trim())
+      const matchingKey = Object.keys(allData).find(key => {
+        return key.includes(brandPart) && key.includes(productPart)
+      })
+      if (matchingKey) {
+        productName = matchingKey
+        productData = allData[matchingKey]
+        console.log(`[Sentiment API] Found matching product key: ${matchingKey}`)
+      }
+    }
 
     if (!productData || productData.length === 0) {
       console.error(`[Sentiment API] Product data not found: ${productName}`)
@@ -154,39 +217,14 @@ export async function GET(request: Request) {
       const inventecSentimentScore = modelData.sentiment_score?.["英业达"] || 0
       const sentimentIndex = inventecSentimentScore
       
-      // Positive/Neutral/Negative: estimate based on sentiment_score，确保总和为100%
-      let positive = 0, neutral = 0, negative = 0
-      
-      if (inventecSentimentScore >= 0.7) {
-        // 高sentiment: 主要是positive
-        positive = Math.min(100, ((inventecSentimentScore - 0.7) / 0.3) * 60 + 40) // 40-100%
-        neutral = Math.max(0, (1 - inventecSentimentScore) * 40) // 0-12%
-        negative = Math.max(0, 100 - positive - neutral)
-      } else if (inventecSentimentScore >= 0.3) {
-        // 中等sentiment: 主要是neutral
-        neutral = Math.min(100, ((inventecSentimentScore - 0.3) / 0.4) * 40 + 60) // 60-100%
-        positive = Math.max(0, (inventecSentimentScore - 0.3) / 0.4 * 30) // 0-30%
-        negative = Math.max(0, (0.7 - inventecSentimentScore) / 0.4 * 30) // 0-30%
-        // 确保总和为100%
-        const total = positive + neutral + negative
-        if (total > 0) {
-          positive = (positive / total) * 100
-          neutral = (neutral / total) * 100
-          negative = 100 - positive - neutral
-        }
-      } else {
-        // 低sentiment: 主要是negative
-        negative = Math.min(100, ((0.3 - inventecSentimentScore) / 0.3) * 60 + 40) // 40-100%
-        neutral = Math.max(0, inventecSentimentScore / 0.3 * 40) // 0-40%
-        positive = Math.max(0, 100 - negative - neutral)
-      }
+      const breakdown = getSentimentBreakdown(inventecSentimentScore)
       
       kpis = {
         sov: parseFloat(sov.toFixed(1)),
         sentimentIndex: parseFloat(sentimentIndex.toFixed(4)),
-        positive: parseFloat(positive.toFixed(1)),
-        neutral: parseFloat(neutral.toFixed(1)),
-        negative: parseFloat(negative.toFixed(1)),
+        positive: breakdown.positive,
+        neutral: breakdown.neutral,
+        negative: breakdown.negative,
       }
     } else {
       // Multi-day mode: use average of all days
@@ -212,32 +250,10 @@ export async function GET(request: Request) {
         const inventecSentimentScore = dayModelData.sentiment_score?.["英业达"] || 0
         sentimentIndexSum += inventecSentimentScore
         
-        // Positive/Neutral/Negative
-        let positive = 0, neutral = 0, negative = 0
-        
-        if (inventecSentimentScore >= 0.7) {
-          positive = Math.min(100, ((inventecSentimentScore - 0.7) / 0.3) * 60 + 40)
-          neutral = Math.max(0, (1 - inventecSentimentScore) * 40)
-          negative = Math.max(0, 100 - positive - neutral)
-        } else if (inventecSentimentScore >= 0.3) {
-          neutral = Math.min(100, ((inventecSentimentScore - 0.3) / 0.4) * 40 + 60)
-          positive = Math.max(0, (inventecSentimentScore - 0.3) / 0.4 * 30)
-          negative = Math.max(0, (0.7 - inventecSentimentScore) / 0.4 * 30)
-          const total = positive + neutral + negative
-          if (total > 0) {
-            positive = (positive / total) * 100
-            neutral = (neutral / total) * 100
-            negative = 100 - positive - neutral
-          }
-        } else {
-          negative = Math.min(100, ((0.3 - inventecSentimentScore) / 0.3) * 60 + 40)
-          neutral = Math.max(0, inventecSentimentScore / 0.3 * 40)
-          positive = Math.max(0, 100 - negative - neutral)
-        }
-        
-        positiveSum += positive
-        neutralSum += neutral
-        negativeSum += negative
+        const breakdown = getSentimentBreakdown(inventecSentimentScore)
+        positiveSum += breakdown.positive
+        neutralSum += breakdown.neutral
+        negativeSum += breakdown.negative
         dayCount++
       })
       
@@ -532,91 +548,203 @@ export async function GET(request: Request) {
       })
     }
 
-    // Extract risk topics from aggregated_sentiment_detail
+    // Extract risk topics from aggregated_sentiment_detail (从所有品牌中提取)
     const riskTopics: RiskTopic[] = []
-    const selfBrandKey = "英业达"
+    const selfBrandKey = resolveSelfBrandKey(getModelData(filteredData[0]?.[1], modelKey) || {})
     
-    // Collect all positive and negative aspects from all days
-    const positiveAspectsMap = new Map<string, number>()
-    const negativeAspectsMap = new Map<string, number>()
+    // Collect all positive and negative aspects from all brands and all days
+    const positiveAspectsMap = new Map<string, { count: number; brand: string; domains: string[] }>()
+    const negativeAspectsMap = new Map<string, { count: number; brand: string; domains: string[] }>()
     
+    const sourceCategoryTotals = new Map<string, { pos: number; neu: number; neg: number; count: number }>()
+
     filteredData.forEach(([date, data]: [string, any]) => {
       const dayModelData = getModelData(data, modelKey)
-      const aggregated = dayModelData?.aggregated_sentiment_detail?.[selfBrandKey]
+      const aggregated = dayModelData?.aggregated_sentiment_detail
+      const brandDomains = dayModelData?.brand_domains || {}
+      const sentimentScores = dayModelData?.sentiment_score || {}
       
-      if (aggregated) {
-        // Extract positive aspects
-        const positiveAspects = Array.isArray(aggregated.positive_aspects) ? aggregated.positive_aspects : []
-        positiveAspects.forEach((aspect: string) => {
-          if (aspect && typeof aspect === "string") {
-            const trimmed = aspect.trim()
-            if (trimmed) {
-              positiveAspectsMap.set(trimmed, (positiveAspectsMap.get(trimmed) || 0) + 1)
+      if (aggregated && typeof aggregated === "object") {
+        // 遍历所有品牌的aspects
+        Object.entries(aggregated).forEach(([brandName, brandData]: [string, any]) => {
+          if (!brandData || typeof brandData !== "object") return
+          
+          const domains = Array.isArray(brandDomains[brandName]) ? brandDomains[brandName] : []
+          
+          // Extract positive aspects
+          const positiveAspects = Array.isArray(brandData.positive_aspects) ? brandData.positive_aspects : []
+          positiveAspects.forEach((aspect: string) => {
+            if (aspect && typeof aspect === "string") {
+              const trimmed = aspect.trim()
+              if (trimmed) {
+                const existing = positiveAspectsMap.get(trimmed)
+                if (existing) {
+                  existing.count += 1
+                  // 合并域名
+                  domains.forEach((d: string) => {
+                    if (!existing.domains.includes(d)) {
+                      existing.domains.push(d)
+                    }
+                  })
+                } else {
+                  positiveAspectsMap.set(trimmed, {
+                    count: 1,
+                    brand: brandName,
+                    domains: [...domains],
+                  })
+                }
+              }
             }
-          }
-        })
-        
-        // Extract negative aspects
-        const negativeAspects = Array.isArray(aggregated.negative_aspects) ? aggregated.negative_aspects : []
-        negativeAspects.forEach((aspect: string) => {
-          if (aspect && typeof aspect === "string") {
-            const trimmed = aspect.trim()
-            if (trimmed) {
-              negativeAspectsMap.set(trimmed, (negativeAspectsMap.get(trimmed) || 0) + 1)
+          })
+          
+          // Extract negative aspects (重点提取这些作为Risk Topics)
+          const negativeAspects = Array.isArray(brandData.negative_aspects) ? brandData.negative_aspects : []
+          negativeAspects.forEach((aspect: string) => {
+            if (aspect && typeof aspect === "string") {
+              const trimmed = aspect.trim()
+              if (trimmed) {
+                const existing = negativeAspectsMap.get(trimmed)
+                if (existing) {
+                  existing.count += 1
+                  // 合并域名
+                  domains.forEach((d: string) => {
+                    if (!existing.domains.includes(d)) {
+                      existing.domains.push(d)
+                    }
+                  })
+                } else {
+                  negativeAspectsMap.set(trimmed, {
+                    count: 1,
+                    brand: brandName,
+                    domains: [...domains],
+                  })
+                }
+              }
             }
-          }
+          })
         })
       }
+
+      Object.entries(brandDomains).forEach(([brandName, domains]: [string, any]) => {
+        const sentimentScore = sentimentScores[brandName] ?? 0
+        const breakdown = getSentimentBreakdown(sentimentScore)
+        if (Array.isArray(domains)) {
+          domains.forEach((domain) => {
+            const category = getDomainCategory(domain)
+            const bucket = sourceCategoryTotals.get(category) || { pos: 0, neu: 0, neg: 0, count: 0 }
+            bucket.pos += breakdown.positive
+            bucket.neu += breakdown.neutral
+            bucket.neg += breakdown.negative
+            bucket.count += 1
+            sourceCategoryTotals.set(category, bucket)
+          })
+        }
+      })
     })
     
-    // Convert to RiskTopic format (top 5 positive and top 5 negative)
-    // Only process if we have aspects
-    if (positiveAspectsMap.size > 0) {
-      // Calculate sentiment scores based on mention count (more mentions = higher score)
-      const positiveCounts = Array.from(positiveAspectsMap.values())
-      const maxPositiveCount = Math.max(...positiveCounts, 1)
-      
-      const topPositiveAspects = Array.from(positiveAspectsMap.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([aspect, count], index) => {
-          // Calculate sentiment score based on count (normalize to 0.7-1.0 range)
-          const normalizedCount = count / maxPositiveCount
-          const sentiment = 0.7 + (normalizedCount * 0.3) // 0.7 to 1.0
-          return {
-            id: `positive_${index}_${aspect.substring(0, 10).replace(/\s/g, '_')}`,
-            prompt: aspect,
-            answer: "", // Not available in current data structure
-            sources: count,
-            sentiment: sentiment,
-          }
-        })
-      
-      riskTopics.push(...topPositiveAspects)
+    const sourcesDistribution: SentimentSourceDistribution[] = Array.from(sourceCategoryTotals.entries())
+      .map(([type, data]) => {
+        const divisor = data.count || 1
+        return {
+          type,
+          pos: parseFloat((data.pos / divisor).toFixed(1)),
+          neu: parseFloat((data.neu / divisor).toFixed(1)),
+          neg: parseFloat((data.neg / divisor).toFixed(1)),
+        }
+      })
+      .filter((item) => item.pos || item.neu || item.neg)
+      .sort((a, b) => b.pos - a.pos)
+      .slice(0, 8)
+    
+    // Convert to RiskTopic format (重点提取negative aspects作为Risk Topics)
+    // 将aspect转换为prompt格式（不添加"关于"前缀）
+    const convertAspectToPrompt = (aspect: string): string => {
+      // 如果aspect已经是问题格式，直接返回
+      if (aspect.includes("?") || aspect.includes("？")) {
+        return aspect
+      }
+      // 直接返回aspect，不添加前缀
+      return aspect
     }
     
+    const buildTopicSummaries = (
+      aspectMap: Map<string, { count: number; brand: string; domains: string[] }>,
+      isPositive: boolean
+    ): SentimentTopicSummary[] => {
+      if (aspectMap.size === 0) return []
+      const maxCount = Math.max(...Array.from(aspectMap.values()).map((v) => v.count), 1)
+      return Array.from(aspectMap.entries())
+        .map(([aspect, data]) => {
+          const weight = data.count / maxCount
+          const sentiment = isPositive ? 0.3 + weight * 0.7 : -(0.3 + weight * 0.7)
+          const normalizedScore = Math.min(1, Math.max(0, weight))
+          return {
+            topic: aspect,
+            sentiment: parseFloat(sentiment.toFixed(3)),
+            score: parseFloat(normalizedScore.toFixed(3)),
+            mentions: data.count,
+          }
+        })
+        .sort((a, b) => (isPositive ? b.sentiment - a.sentiment : a.sentiment - b.sentiment))
+        .slice(0, 5)
+    }
+
+    const positiveTopics = buildTopicSummaries(positiveAspectsMap, true)
+    const negativeTopics = buildTopicSummaries(negativeAspectsMap, false)
+
+    // 只处理negative aspects作为Risk Topics（按用户要求）
     if (negativeAspectsMap.size > 0) {
-      // Calculate sentiment scores based on mention count (more mentions = higher score)
-      const negativeCounts = Array.from(negativeAspectsMap.values())
+      const negativeCounts = Array.from(negativeAspectsMap.values()).map(v => v.count)
       const maxNegativeCount = Math.max(...negativeCounts, 1)
       
       const topNegativeAspects = Array.from(negativeAspectsMap.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([aspect, count], index) => {
-          // Calculate sentiment score based on count (normalize to -1.0 to -0.7 range)
-          const normalizedCount = count / maxNegativeCount
-          const sentiment = -0.7 - (normalizedCount * 0.3) // -1.0 to -0.7
+        .sort((a, b) => b[1].count - a[1].count)
+        .slice(0, 10) // 取前10个，后续可以筛选
+        .map(([aspect, data], index) => {
+          // 计算sentiment score（基于提及次数，归一化到-1.0到-0.3范围）
+          const normalizedCount = data.count / maxNegativeCount
+          const sentiment = -1.0 + (normalizedCount * 0.7) // -1.0 to -0.3
+          
+          // 获取第一个域名作为sourceUrl
+          const sourceUrl = data.domains.length > 0 ? `https://${data.domains[0]}` : ""
+          
           return {
-            id: `negative_${index}_${aspect.substring(0, 10).replace(/\s/g, '_')}`,
-            prompt: aspect,
-            answer: "", // Not available in current data structure
-            sources: count,
+            id: `risk_${index}_${aspect.substring(0, 20).replace(/\s/g, '_')}`,
+            prompt: convertAspectToPrompt(aspect),
+            answer: aspect, // 使用aspect作为answer
+            sources: data.count,
             sentiment: sentiment,
+            sourceUrl: sourceUrl,
           }
         })
       
       riskTopics.push(...topNegativeAspects)
+    }
+    
+    // 如果需要，也可以添加一些positive aspects（但主要focus在negative）
+    if (positiveAspectsMap.size > 0) {
+      const positiveCounts = Array.from(positiveAspectsMap.values()).map(v => v.count)
+      const maxPositiveCount = Math.max(...positiveCounts, 1)
+      
+      const topPositiveAspects = Array.from(positiveAspectsMap.entries())
+        .sort((a, b) => b[1].count - a[1].count)
+        .slice(0, 5)
+        .map(([aspect, data], index) => {
+          const normalizedCount = data.count / maxPositiveCount
+          const sentiment = 0.3 + (normalizedCount * 0.7) // 0.3 to 1.0
+          const sourceUrl = data.domains.length > 0 ? `https://${data.domains[0]}` : ""
+          
+          return {
+            id: `positive_${index}_${aspect.substring(0, 20).replace(/\s/g, '_')}`,
+            prompt: convertAspectToPrompt(aspect),
+            answer: aspect,
+            sources: data.count,
+            sentiment: sentiment,
+            sourceUrl: sourceUrl,
+          }
+        })
+      
+      riskTopics.push(...topPositiveAspects)
     }
 
     // Calculate the actual date range for display (subtract 1 day from file dates)
@@ -628,6 +756,9 @@ export async function GET(request: Request) {
       trends,
       ranking,
       riskTopics,
+      sourcesDistribution,
+      positiveTopics,
+      negativeTopics,
       actualDateRange: {
         start: actualStartDate,
         end: actualEndDate,

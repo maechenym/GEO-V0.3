@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware"
 import type { Profile } from "@/types/auth"
 import apiClient from "@/services/api"
 import { SessionResponseSchema } from "@/types/auth"
+import { usePlanStore, derivePlanTypeFromSubscription } from "@/store/plan.store"
 
 interface AuthState {
   token: string | null
@@ -59,6 +60,16 @@ export const useAuthStore = create<AuthState>()(
               profile: data.profile,
               isLoading: false,
             })
+
+            const planStore = usePlanStore.getState()
+            planStore.setPlan({
+              planType: derivePlanTypeFromSubscription(
+                data.profile.subscription?.planId,
+                data.profile.subscription?.status ?? null
+              ),
+              trialEndsAt: data.profile.subscription?.trialEndsAt || null,
+            })
+
             return data.profile
           }
           console.error("[AuthStore] Session response not ok or no profile:", data)
@@ -66,6 +77,7 @@ export const useAuthStore = create<AuthState>()(
         } catch (error) {
           console.error("[AuthStore] Error loading profile:", error)
           set({ isLoading: false, profile: null })
+          usePlanStore.getState().reset()
           // 如果 token 无效，清除状态（但不抛出错误，避免无限重试）
           if (error && typeof error === "object" && "response" in error) {
             const axiosError = error as { response?: { status?: number } }
@@ -108,6 +120,7 @@ export const useAuthStore = create<AuthState>()(
             profile: null,
             isNew: false,
           })
+          usePlanStore.getState().reset()
           if (typeof window !== "undefined") {
             localStorage.removeItem("token")
             localStorage.removeItem("auth-storage")

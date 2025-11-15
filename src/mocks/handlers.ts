@@ -119,7 +119,6 @@ function preInitializeTestAccount() {
   mockBrands[testEmail] = {
     id: INVENTEC_BRAND_ID,
     name: "英业达 (Inventec)",
-    description: "英业达公司产品线",
   }
 
   // 初始化产品列表
@@ -172,7 +171,6 @@ async function initializeInventecBrand(email: string) {
       mockBrands[email] = {
         id: INVENTEC_BRAND_ID,
         name: "英业达 (Inventec)",
-        description: "英业达公司产品线",
       }
       console.log(`[MSW] Created Inventec brand for ${email}`)
     }
@@ -278,7 +276,6 @@ async function initializeInventecBrand(email: string) {
       mockBrands[email] = {
         id: INVENTEC_BRAND_ID,
         name: "英业达 (Inventec)",
-        description: "英业达公司产品线",
       }
     }
   }
@@ -461,6 +458,33 @@ export const handlers = [
   http.post("*/api/auth/logout", async () => {
     return HttpResponse.json({
       ok: true,
+    })
+  }),
+
+  // POST /api/auth/change-password
+  http.post("*/api/auth/change-password", async ({ request }) => {
+    const { currentPassword, newPassword } = (await request.json()) as {
+      currentPassword?: string
+      newPassword?: string
+    }
+
+    if (!currentPassword || !newPassword) {
+      return HttpResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 }
+      )
+    }
+
+    if (newPassword.length < 8) {
+      return HttpResponse.json(
+        { error: "Password must be at least 8 characters" },
+        { status: 400 }
+      )
+    }
+
+    return HttpResponse.json({
+      ok: true,
+      message: "Password updated",
     })
   }),
 
@@ -931,7 +955,6 @@ export const handlers = [
       mockBrands[email] = {
         id: `brand_${Date.now()}`,
         name: "My Brand",
-        description: null,
       }
     }
 
@@ -960,7 +983,6 @@ export const handlers = [
       mockBrands[email] = {
         id: `brand_${Date.now()}`,
         name: "",
-        description: null,
       }
     }
 
@@ -1491,7 +1513,6 @@ export const handlers = [
       mockBrands[email] = {
         id: id,
         name: "My Brand",
-        description: null,
       }
     } else {
       console.log(`[MSW] Found brand for ${email}:`, mockBrands[email])
@@ -1547,7 +1568,6 @@ export const handlers = [
     const newBrand = {
       id: `brand_${Date.now()}`,
       name: body.name,
-      description: body.description || null,
     }
 
     mockBrands[email] = newBrand

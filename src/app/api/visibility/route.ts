@@ -2,8 +2,9 @@ import { NextResponse } from "next/server"
 import path from "path"
 import { promises as fs } from "fs"
 import { format, subDays } from "date-fns"
+import { toTraditional, translate } from "@/lib/i18n"
 
-const SELF_BRAND_CANDIDATES = ["英业达", "英業達", "Your Brand", "Inventec"]
+const SELF_BRAND_CANDIDATES = ["英业达", "Inventec"]
 const MODEL_KEYS = ["chatgpt", "gemini", "claude"] as const
 
 const slugify = (value: string) =>
@@ -139,45 +140,24 @@ const getModelData = (dayData: any, modelKey: string) => {
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
-    const startDate = searchParams.get("startDate") || "2025-10-31"
-    const endDate = searchParams.get("endDate") || "2025-11-06"
+    const startDate = searchParams.get("startDate") || "2025-11-08"
+    const endDate = searchParams.get("endDate") || "2025-11-14"
     const productId = searchParams.get("productId")
     const modelParam = (searchParams.get("model") || "all").toLowerCase()
     const modelKey = MODEL_KEYS.includes(modelParam as typeof MODEL_KEYS[number]) ? modelParam : "all"
+    const language = searchParams.get("language") || "en"
 
-    // 读取JSON文件
+    // 读取JSON文件 - 只使用新文件
     const projectRoot = process.cwd()
-    // 优先从项目目录读取（生产环境可用）
-    const projectDataPath = path.resolve(projectRoot, "data", "all_brands_results_20251106_075334.json")
-    const jsonFilePath = path.resolve(projectRoot, "..", "all_brands_results_20251106_075334.json")
-    const downloadsPath = path.resolve("/Users/yimingchen/Downloads", "all_brands_results_20251106_075334.json")
-    const altPath = path.resolve(projectRoot, "documents", "all_brands_results_20251106_075334.json")
+    const dataPath = path.resolve(projectRoot, "data", "all_products_results_20251114_021851.json")
     
     let fileContents: string = ""
-    let loadedPath: string | null = null
     
-    // 按优先级尝试读取文件（项目目录优先，适用于生产环境）
-    const pathsToTry = [
-      projectDataPath,  // 1. 项目 data 目录（生产环境优先）
-      downloadsPath,    // 2. Downloads文件夹（开发环境）
-      jsonFilePath,     // 3. 项目上级目录
-      altPath,          // 4. documents目录
-    ]
-    
-    for (const tryPath of pathsToTry) {
-      try {
-        fileContents = await fs.readFile(tryPath, "utf8")
-        loadedPath = tryPath
-        console.log(`[Visibility API] Successfully loaded JSON from: ${tryPath}`)
-        break
-      } catch (error: any) {
-        // 继续尝试下一个路径
-        continue
-      }
-    }
-    
-    if (!loadedPath || !fileContents) {
-      console.error("[Visibility API] Error reading JSON file from all paths:", pathsToTry)
+    try {
+      fileContents = await fs.readFile(dataPath, "utf8")
+      console.log(`[Visibility API] Successfully loaded JSON from: ${dataPath}`)
+    } catch (error: any) {
+      console.error(`[Visibility API] Error reading JSON file from: ${dataPath}`, error)
       return NextResponse.json(
         { error: "Failed to read data file" },
         { status: 500 }
@@ -187,7 +167,8 @@ export async function GET(request: Request) {
     const allData = JSON.parse(fileContents)
     
     // 确定要使用的产品名称
-    let productName = "英业达 (Inventec) 机架解决方案" // 默认产品
+    // 新格式: "品牌名 (英文名) | 产品名"
+    let productName = "英业达 (Inventec) | 笔记本电脑代工" // 默认产品
     
     // 如果提供了productId，尝试从产品数据中获取产品名称
     if (productId) {
@@ -203,7 +184,19 @@ export async function GET(request: Request) {
         if (productResponse.ok) {
           const productData = await productResponse.json()
           if (productData.product && productData.product.name) {
-            productName = productData.product.name
+            // 从产品名称构建JSON键名格式
+            const productNameFromAPI = productData.product.name
+            const brandName = productData.product.brand?.name || "英业达 (Inventec)"
+            
+            // 构建新格式的键名: "品牌名 | 产品名"
+            if (productNameFromAPI.includes("|")) {
+              productName = productNameFromAPI
+            } else if (productNameFromAPI.includes(brandName)) {
+              productName = productNameFromAPI.replace(/\s+/, " | ")
+            } else {
+              productName = `${brandName} | ${productNameFromAPI}`
+            }
+            
             console.log(`[Visibility API] Using product: ${productName} for productId: ${productId}`)
           }
         } else {
@@ -215,7 +208,21 @@ export async function GET(request: Request) {
       }
     }
     
-    const productData = allData[productName]
+    // 如果直接匹配失败，尝试查找包含该产品名的键
+    let productData = allData[productName]
+    
+    if (!productData && productName.includes("|")) {
+      // 尝试模糊匹配：查找包含品牌和产品名的键
+      const [brandPart, productPart] = productName.split("|").map(s => s.trim())
+      const matchingKey = Object.keys(allData).find(key => {
+        return key.includes(brandPart) && key.includes(productPart)
+      })
+      if (matchingKey) {
+        productName = matchingKey
+        productData = allData[matchingKey]
+        console.log(`[Visibility API] Found matching product key: ${matchingKey}`)
+      }
+    }
 
     if (!productData || productData.length === 0) {
       console.error(`[Visibility API] Product data not found: ${productName}`)
@@ -733,6 +740,7 @@ export async function GET(request: Request) {
     const focus = calculateFocusRanking()
 
     const computeHeatmap = (): VisibilityData["heatmap"] => {
+      const shouldTranslate = language === "zh-TW"
       const selfSourceCounts = new Map<string, number>()
       const otherSourceCounts = new Map<string, number>()
       const sourceLabels = new Map<string, string>()
@@ -847,55 +855,42 @@ export async function GET(request: Request) {
         }
       })
 
-      // 先计算 rankedSelfTopics 和 rankedOtherTopics（用于后续的映射）
+      // 从数据中真实提取主题（从所有品牌的aspects中提取），与Overview API保持一致
+      const allTopicCounts = new Map<string, number>()
+      const allTopicExamples = new Map<string, string>()
+
+      // 合并所有主题（包括本品牌和其他品牌）
       const rankedSelfTopics = sortEntries(selfTopicCounts)
       const rankedOtherTopics = sortEntries(otherTopicCounts)
-
-      // 使用固定的 6 个主题，与 Intent 页面同步
-      // 从数据中提取相关主题的提及次数，并映射到固定主题
-      const fixedTopicMap = new Map<string, number>()
-      const fixedTopicExamples = new Map<string, string>()
       
-      // 初始化所有固定主题
-      FALLBACK_TOPICS.forEach((topic) => {
-        fixedTopicMap.set(topic.name, 0)
-        fixedTopicExamples.set(topic.name, topic.example)
-      })
-
-      // 从数据中提取相关主题的提及次数
-      const allTopics = [...rankedSelfTopics, ...rankedOtherTopics]
-      allTopics.forEach(([topicName, count]) => {
+      // 合并所有主题的计数
+      ;[...rankedSelfTopics, ...rankedOtherTopics].forEach(([topicName, count]) => {
         const normalized = topicName.toLowerCase()
+        if (!normalized) return
         
-        // 关键词匹配逻辑，将数据中的 topics 映射到固定主题
-        if (normalized.includes("performance") || normalized.includes("architecture") || normalized.includes("架构") || normalized.includes("性能")) {
-          fixedTopicMap.set(FALLBACK_TOPICS[0].name, (fixedTopicMap.get(FALLBACK_TOPICS[0].name) || 0) + count)
-        } else if (normalized.includes("cooling") || normalized.includes("power") || normalized.includes("density") || normalized.includes("散热") || normalized.includes("能耗") || normalized.includes("高密度")) {
-          fixedTopicMap.set(FALLBACK_TOPICS[1].name, (fixedTopicMap.get(FALLBACK_TOPICS[1].name) || 0) + count)
-        } else if (normalized.includes("stability") || normalized.includes("availability") || normalized.includes("reliability") || normalized.includes("稳定性") || normalized.includes("高可用")) {
-          fixedTopicMap.set(FALLBACK_TOPICS[2].name, (fixedTopicMap.get(FALLBACK_TOPICS[2].name) || 0) + count)
-        } else if (normalized.includes("ai") || normalized.includes("deep learning") || normalized.includes("hpc") || normalized.includes("gpu") || normalized.includes("人工智能") || normalized.includes("深度学习") || normalized.includes("高性能计算")) {
-          fixedTopicMap.set(FALLBACK_TOPICS[3].name, (fixedTopicMap.get(FALLBACK_TOPICS[3].name) || 0) + count)
-        } else if (normalized.includes("edge") || normalized.includes("cloud") || normalized.includes("hybrid") || normalized.includes("边缘计算") || normalized.includes("私有云") || normalized.includes("混合云")) {
-          fixedTopicMap.set(FALLBACK_TOPICS[4].name, (fixedTopicMap.get(FALLBACK_TOPICS[4].name) || 0) + count)
-        } else if (normalized.includes("security") || normalized.includes("maintenance") || normalized.includes("remote") || normalized.includes("management") || normalized.includes("安全性") || normalized.includes("维护") || normalized.includes("远程管理")) {
-          fixedTopicMap.set(FALLBACK_TOPICS[5].name, (fixedTopicMap.get(FALLBACK_TOPICS[5].name) || 0) + count)
+        // 使用aspect本身作为主题名（去除"关于"前缀）
+        const cleanTopicName = topicName.trim().replace(/^关于/, "").trim()
+        if (!cleanTopicName) return
+        
+        allTopicCounts.set(cleanTopicName, (allTopicCounts.get(cleanTopicName) || 0) + count)
+        if (!allTopicExamples.has(cleanTopicName)) {
+          allTopicExamples.set(cleanTopicName, topicName)
         }
       })
 
-      // 如果没有匹配到数据，给每个主题分配一个基础值
-      const totalFixedTopicCounts = Array.from(fixedTopicMap.values()).reduce((sum, count) => sum + count, 0)
-      if (totalFixedTopicCounts === 0) {
-        FALLBACK_TOPICS.forEach((topic, index) => {
-          fixedTopicMap.set(topic.name, 10 - index) // 第一个主题10次，第二个9次，以此类推
+      // 如果没有数据，使用fallback主题
+      if (allTopicCounts.size === 0) {
+        FALLBACK_TOPICS.forEach((topic) => {
+          allTopicCounts.set(topic.name, 1)
+          allTopicExamples.set(topic.name, topic.example)
         })
       }
 
-      // 构建选中的主题列表（按提及次数排序）
-      const selectedTopicsRaw = Array.from(fixedTopicMap.entries())
+      // 构建选中的主题列表（按提及次数排序，最多返回前6个）
+      const selectedTopicsRaw = Array.from(allTopicCounts.entries())
         .map(([key, count]) => ({ key, count }))
         .sort((a, b) => b.count - a.count)
-        .slice(0, 6) // 确保只返回 6 个主题
+        .slice(0, 6) // 最多返回 6 个最热门的主题
 
       const totalSourceMentions =
         selectedSources.reduce((sum, entry) => sum + entry.count, 0) || selectedSources.length || 1
@@ -914,14 +909,16 @@ export async function GET(request: Request) {
       })
 
       const topicsWithShare = selectedTopicsRaw.map((entry) => {
-        // 优先使用固定主题的示例，如果没有则使用从数据中提取的示例
-        const example = fixedTopicExamples.get(entry.key) || topicExamples.get(entry.key) || entry.key
+        // 使用从数据中提取的示例
+        const example = allTopicExamples.get(entry.key) || entry.key
+        // 翻译主题名称（支持简体中文和英文）
+        const translatedName = shouldTranslate ? translate(entry.key, language as "en" | "zh-TW") : entry.key
         return {
-          name: entry.key,
-          slug: slugify(entry.key),
+          name: translatedName,
+          slug: slugify(entry.key), // slug保持原样，用于匹配
           count: entry.count,
           share: entry.count / totalTopicMentions,
-          example,
+          example: shouldTranslate ? translate(example, language as "en" | "zh-TW") : example,
         }
       })
 

@@ -14,10 +14,10 @@ export function PlanGrid({ plans }: PlanGridProps) {
   // Map planType to planId
   const getCurrentPlanId = (): CheckoutPlan["planId"] | null => {
     if (planType === "trial") return "free"
-    if (planType === "pro") return "basic"
+    if (planType === "basic") return "basic"
+    if (planType === "pro") return "advanced"
     if (planType === "enterprise") return "enterprise"
-    // Default to advanced if no planType
-    return "advanced"
+    return null
   }
 
   const currentPlanId = getCurrentPlanId()

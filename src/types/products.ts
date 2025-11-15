@@ -7,8 +7,6 @@ import { z } from "zod"
 export const BrandSchema = z.object({
   id: z.string(),
   name: z.string(),
-  description: z.string().optional().nullable(),
-  website: z.string().optional().nullable(), // Website URL
 })
 
 export type Brand = z.infer<typeof BrandSchema>
@@ -57,8 +55,6 @@ export type GetBrandResponse = z.infer<typeof GetBrandResponseSchema>
 // Update Brand Request
 export const UpdateBrandRequestSchema = z.object({
   name: z.string().min(1).optional(),
-  description: z.string().optional().nullable(),
-  website: z.string().optional().nullable(), // Website URL
 })
 
 export type UpdateBrandRequest = z.infer<typeof UpdateBrandRequestSchema>
@@ -175,8 +171,6 @@ export type GetBrandsResponse = z.infer<typeof GetBrandsResponseSchema>
 // Create Brand Request
 export const CreateBrandRequestSchema = z.object({
   name: z.string().min(1),
-  description: z.string().optional().nullable(),
-  website: z.string().optional().nullable(), // Website URL
 })
 
 export type CreateBrandRequest = z.infer<typeof CreateBrandRequestSchema>

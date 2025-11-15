@@ -16,7 +16,7 @@ import {
 import { cn } from "@/lib/utils"
 import type { CheckoutPlan } from "@/store/checkout.store"
 import { useCheckoutStore } from "@/store/checkout.store"
-import { usePlanStore } from "@/store/plan.store"
+import { usePlanStore, mapPlanIdToPlanType } from "@/store/plan.store"
 import { useLanguageStore } from "@/store/language.store"
 import { useAuthStore } from "@/store/auth.store"
 import { translate } from "@/lib/i18n"
@@ -91,7 +91,7 @@ export function PlanCard({ plan, isCurrentPlan = false }: PlanCardProps) {
         // Update plan store
         const { setPlan } = usePlanStore.getState()
         setPlan({
-          planType: plan.planId === "basic" ? "pro" : plan.planId === "advanced" ? "pro" : "enterprise",
+          planType: mapPlanIdToPlanType(plan.planId),
           trialEndsAt: trialEndsAt.toISOString(),
         })
         

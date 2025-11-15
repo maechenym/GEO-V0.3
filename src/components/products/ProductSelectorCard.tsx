@@ -19,7 +19,7 @@ interface ProductSelectorCardProps {
 }
 
 export function ProductSelectorCard({ brandId }: ProductSelectorCardProps) {
-  const { selectedProductId, setSelectedProduct } = useBrandUIStore()
+  const { selectedProductId, savedProductId, setSelectedProduct, setDirty } = useBrandUIStore()
   const { language } = useLanguageStore()
   const { data: productsData, isLoading } = useProducts(brandId)
   const products = productsData?.products || []
@@ -38,9 +38,14 @@ export function ProductSelectorCard({ brandId }: ProductSelectorCardProps) {
   // 使用本地状态来确保默认值被设置
   const [initialized, setInitialized] = useState(false)
 
-  // 如果没有选中产品且数据已加载，默认选择第一个产品（机架解决方案）
+  // 如果没有选中产品且数据已加载，优先使用上一次保存的产品，否则默认选择机架解决方案
   useEffect(() => {
     if (!isLoading && activeProducts.length > 0 && !initialized) {
+      if (savedProductId && activeProducts.some((p: Product) => p.id === savedProductId)) {
+        setSelectedProduct(savedProductId)
+        setInitialized(true)
+        return
+      }
       if (!selectedProductId && defaultProduct?.id) {
         console.log("[ProductSelector] Setting default product:", defaultProduct.id, defaultProduct.name)
         setSelectedProduct(defaultProduct.id)
@@ -50,10 +55,18 @@ export function ProductSelectorCard({ brandId }: ProductSelectorCardProps) {
         setInitialized(true)
       }
     }
-  }, [isLoading, selectedProductId, defaultProduct?.id, setSelectedProduct, activeProducts.length, initialized])
+  }, [
+    isLoading,
+    selectedProductId,
+    defaultProduct?.id,
+    setSelectedProduct,
+    activeProducts.length,
+    initialized,
+    savedProductId,
+  ])
 
   // 确保有有效的产品ID用于Select组件
-  const currentProductId = selectedProductId || (defaultProduct?.id ?? "")
+  const currentProductId = selectedProductId || savedProductId || defaultProduct?.id || ""
   
   console.log("[ProductSelector] Render:", {
     isLoading,
@@ -71,6 +84,7 @@ export function ProductSelectorCard({ brandId }: ProductSelectorCardProps) {
 
   const handleProductChange = (productId: string) => {
     setSelectedProduct(productId)
+    setDirty(true)
   }
 
   // 如果还在加载或没有产品，显示加载状态

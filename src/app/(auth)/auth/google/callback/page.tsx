@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useEffect, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuthStore } from "@/store/auth.store"
 import apiClient from "@/services/api"
@@ -14,6 +14,7 @@ function GoogleCallbackContent() {
   const { loginWithToken, loadProfile } = useAuthStore()
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const hasHandledRef = useRef(false)
 
   useEffect(() => {
     const code = searchParams.get("code")
@@ -23,6 +24,11 @@ function GoogleCallbackContent() {
       setIsLoading(false)
       return
     }
+
+    if (hasHandledRef.current) {
+      return
+    }
+    hasHandledRef.current = true
 
     const handleCallback = async () => {
       try {

@@ -15,6 +15,8 @@ import {
   Target,
 } from "lucide-react"
 import { Logo } from "@/components/logo"
+import { useLanguageStore } from "@/store/language.store"
+import { translate } from "@/lib/i18n"
 
 interface NavItem {
   title: string
@@ -39,15 +41,9 @@ const navigation: NavItem[] = [
   { title: "Profile", href: "/profile", icon: User, group: "Profile" },
 ]
 
-const groupTitles: Record<string, string> = {
-  Tracking: "Tracking",
-  Insights: "Insights",
-  Settings: "Settings",
-  Profile: "Profile",
-}
-
 export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
+  const { language } = useLanguageStore()
 
   const groupedNav = navigation.reduce((acc, item) => {
     const group = item.group || "Other"
@@ -72,7 +68,7 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
       {Object.entries(groupedNav).map(([group, items]) => (
         <div key={group} className="mb-6">
           <h2 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-ink-500">
-            {groupTitles[group] || group}
+            {translate(group, language)}
           </h2>
           <div className="space-y-1">
             {items.map((item) => {
@@ -99,7 +95,7 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
                     )}
                     aria-hidden="true"
                   />
-                  <span>{item.title}</span>
+                  <span>{translate(item.title, language)}</span>
                 </Link>
               )
             })}

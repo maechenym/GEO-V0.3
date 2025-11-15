@@ -36,14 +36,13 @@ export default function ProfilePage() {
   const { language, setLanguage } = useLanguageStore()
   const router = useRouter()
 
-  // 获取当前订阅信息
-  const { data: planData, isLoading: planLoading } = useQuery<PlanResponse>({
+  const { data: planData } = useQuery<PlanResponse>({
     queryKey: ["currentPlan"],
     queryFn: async () => {
       const response = await apiClient.get("/api/plan/current")
       return response.data
     },
-    staleTime: 5 * 60 * 1000, // 5分钟
+    staleTime: 5 * 60 * 1000,
     retry: 1,
   })
 
@@ -56,7 +55,6 @@ export default function ProfilePage() {
     setLanguage(value as "en" | "zh-TW")
   }
 
-  // 格式化日期
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     return date.toLocaleDateString(language === "zh-TW" ? "zh-TW" : "en-US", {
@@ -66,10 +64,9 @@ export default function ProfilePage() {
     })
   }
 
-  // 格式化剩余天数
   const formatRemainingDays = (days: number) => {
     if (days <= 0) {
-      return language === "zh-TW" ? "已过期" : "Expired"
+      return language === "zh-TW" ? "已過期" : "Expired"
     }
     if (days === 1) {
       return language === "zh-TW" ? "1 天" : "1 day"
@@ -79,19 +76,15 @@ export default function ProfilePage() {
 
   return (
     <div className="bg-background -mx-6">
-      {/* Top Filter Bar */}
       <div className="sticky top-0 z-50 bg-white dark:bg-background border-b border-border px-6 py-2">
         <div className="container mx-auto max-w-[1600px]">
           <div className="flex items-center justify-between">
-            {/* Left: Title */}
             <div className="-ml-6">
-              <h1 className="text-xl font-semibold text-foreground">Profile</h1>
+              <h1 className="text-xl font-semibold text-foreground">{translate("Profile", language)}</h1>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {translate("Manage your account settings", language)}
               </p>
             </div>
-            
-            {/* Right: Language Selector */}
             <div className="flex items-center gap-2">
               <Globe className="h-4 w-4 text-muted-foreground" />
               <Select value={language} onValueChange={handleLanguageChange}>
@@ -108,37 +101,31 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="container mx-auto px-4 sm:px-pageX py-4 sm:py-pageY max-w-[1600px]">
         <div className="space-y-6">
-          {/* Account Information Card */}
           <Card className="rounded-2xl">
             <CardHeader>
-              <CardTitle className="text-lg">
-                {translate("Account Information", language)}
-              </CardTitle>
+              <CardTitle className="text-lg">{translate("Account Information", language)}</CardTitle>
               <p className="text-sm text-muted-foreground">
                 {translate("Your account details", language)}
               </p>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {/* Email */}
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                     <Mail className="h-4 w-4" />
                     {translate("Email", language)}
-                  </label>
+                  </span>
                   <p className="text-sm">{profile?.email || translate("Not available", language)}</p>
                 </div>
 
                 <div className="h-px bg-border" />
 
-                {/* Brand Status */}
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-muted-foreground">
+                  <span className="text-sm font-medium text-muted-foreground">
                     {translate("Brand Status", language)}
-                  </label>
+                  </span>
                   <p className="text-sm">
                     {profile?.hasBrand ? (
                       <span className="text-green-600">{translate("Brand configured", language)}</span>
@@ -151,64 +138,59 @@ export default function ProfilePage() {
             </CardContent>
           </Card>
 
-          {/* Subscription Plan Card */}
           {planData?.plan && (
             <Card className="rounded-2xl">
               <CardHeader>
-                <CardTitle className="text-lg">
-                  {translate("Subscription Plan", language)}
-                </CardTitle>
+                <CardTitle className="text-lg">{translate("Subscription Plan", language)}</CardTitle>
                 <p className="text-sm text-muted-foreground">
                   {translate("Your current subscription details", language)}
                 </p>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {/* Plan Name */}
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-muted-foreground">
+                    <span className="text-sm font-medium text-muted-foreground">
                       {translate("Plan", language)}
-                    </label>
+                    </span>
                     <p className="text-sm font-semibold">{planData.plan.name}</p>
                   </div>
 
                   <div className="h-px bg-border" />
 
-                  {/* Subscription Start Date */}
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                       <Calendar className="h-4 w-4" />
                       {translate("Subscription Start Date", language)}
-                    </label>
+                    </span>
                     <p className="text-sm">{formatDate(planData.plan.startDate)}</p>
                   </div>
 
                   <div className="h-px bg-border" />
 
-                  {/* Subscription End Date */}
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                       <Calendar className="h-4 w-4" />
                       {translate("Subscription End Date", language)}
-                    </label>
+                    </span>
                     <p className="text-sm">{formatDate(planData.plan.endDate)}</p>
                   </div>
 
                   <div className="h-px bg-border" />
 
-                  {/* Remaining Days */}
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                       <Clock className="h-4 w-4" />
                       {translate("Remaining Days", language)}
-                    </label>
-                    <p className={`text-sm font-semibold ${
-                      planData.plan.remainingDays <= 3 
-                        ? "text-red-600" 
-                        : planData.plan.remainingDays <= 7 
-                        ? "text-orange-600" 
-                        : "text-green-600"
-                    }`}>
+                    </span>
+                    <p
+                      className={`text-sm font-semibold ${
+                        planData.plan.remainingDays <= 3
+                          ? "text-red-600"
+                          : planData.plan.remainingDays <= 7
+                          ? "text-orange-600"
+                          : "text-green-600"
+                      }`}
+                    >
                       {formatRemainingDays(planData.plan.remainingDays)}
                     </p>
                   </div>
@@ -217,7 +199,6 @@ export default function ProfilePage() {
             </Card>
           )}
 
-          {/* Actions Card */}
           <Card className="rounded-2xl">
             <CardHeader>
               <CardTitle className="text-lg">{translate("Actions", language)}</CardTitle>

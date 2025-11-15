@@ -20,8 +20,6 @@ export async function GET(
       brand: {
         id: "brand_inventec",
         name: "英业达 (Inventec)",
-        description: "英业达公司产品线",
-        website: null,
       },
     })
   }
@@ -31,8 +29,6 @@ export async function GET(
     brand: {
       id: id,
       name: "Brand",
-      description: "",
-      website: null,
     },
   })
 }
@@ -57,8 +53,6 @@ export async function PATCH(
     brand: {
       id: id,
       name: body.name || "Brand",
-      description: body.description ?? null,
-      website: body.website ?? null,
     },
   })
 }

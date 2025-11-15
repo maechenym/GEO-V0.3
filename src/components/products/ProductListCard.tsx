@@ -8,14 +8,6 @@ import { Plus, Trash2, Pencil, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -59,15 +51,38 @@ const productSchema = z.object({
 
 type ProductForm = z.infer<typeof productSchema>
 
+const sanitizeProductName = (name: string) => {
+  if (!name) return ""
+  const trimmed = name.trim()
+
+  if (trimmed.includes("|")) {
+    const parts = trimmed.split("|").map((part) => part.trim())
+    return parts[parts.length - 1] || trimmed
+  }
+
+  if (trimmed.includes("-")) {
+    const parts = trimmed.split("-").map((part) => part.trim())
+    if (parts.length > 1) {
+      return parts[parts.length - 1]
+    }
+  }
+
+  const withoutBrand = trimmed.replace(/^英业达\s*\(Inventec\)\s*/i, "").trim()
+  if (withoutBrand && withoutBrand !== trimmed) {
+    return withoutBrand
+  }
+
+  return trimmed
+}
+
 export function ProductListCard({ products, brandId }: ProductListCardProps) {
   const { getMaxProducts } = usePlanStore()
-  const { markSaved } = useBrandUIStore()
+  const { setDirty } = useBrandUIStore()
   const { language } = useLanguageStore()
   const { profile } = useAuthStore()
   const isTestAccount = profile?.email === "test@example.com"
   const maxProducts = isTestAccount ? Infinity : getMaxProducts()
   const canAddMore = isTestAccount || products.length < maxProducts
-  const activeProducts = products.filter((p) => p.active)
 
   const createProductMutation = useCreateProduct(brandId)
   const updateProductMutation = useUpdateProduct(brandId)
@@ -97,46 +112,46 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
   })
 
   const handleAddProduct = async (data: ProductForm) => {
-    await createProductMutation.mutateAsync(data)
+    const normalizedData: ProductForm = {
+      name: sanitizeProductName(data.name),
+      category: data.category?.trim() || "",
+    }
+    await createProductMutation.mutateAsync(normalizedData)
     reset()
     setAddDialogOpen(false)
-    markSaved()
+    setDirty(true)
   }
 
   const handleEditProduct = (product: Product) => {
     setEditingProduct(product)
     setEditId(product.id)
     resetEdit({
-      name: product.name,
+      name: sanitizeProductName(product.name),
       category: product.category || "",
     })
   }
 
   const handleUpdateProduct = async (data: ProductForm) => {
     if (!editId) return
+    const normalizedData: ProductForm = {
+      name: sanitizeProductName(data.name),
+      category: data.category?.trim() || "",
+    }
     await updateProductMutation.mutateAsync({
       id: editId,
-      data,
+      data: normalizedData,
     })
     resetEdit()
     setEditId(null)
     setEditingProduct(null)
-    markSaved()
-  }
-
-  const handleToggleActive = async (product: Product) => {
-    await updateProductMutation.mutateAsync({
-      id: product.id,
-      data: { active: !product.active },
-    })
-    markSaved()
+    setDirty(true)
   }
 
   const handleDeleteProduct = async () => {
     if (!deleteId) return
     await deleteProductMutation.mutateAsync(deleteId)
     setDeleteId(null)
-    markSaved()
+    setDirty(true)
   }
 
   return (
@@ -146,9 +161,9 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
           <div>
             <h2 className="text-xl font-semibold mb-1">{translate("Products", language)}</h2>
             <p className="text-sm text-muted-foreground">
-              {isTestAccount 
-                ? `${activeProducts.length} ${translate("products", language)}` 
-                : `${activeProducts.length} / ${maxProducts} ${translate("products", language)}`}
+              {isTestAccount
+                ? `${products.length} ${translate("products", language)}`
+                : `${products.length} / ${maxProducts} ${translate("products", language)}`}
             </p>
           </div>
           <Button
@@ -193,12 +208,6 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
                     {translate("Category", language)}
                   </th>
                   <th
-                    className="px-6 py-4 text-left text-sm font-semibold text-gray-900 border-b border-gray-200"
-                    aria-label="Product status"
-                  >
-                    {translate("Status", language)}
-                  </th>
-                  <th
                     className="px-6 py-4 text-right text-sm font-semibold text-gray-900 border-b border-gray-200"
                     aria-label="Actions"
                   >
@@ -217,7 +226,9 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
                           aria-invalid={!!errorsEdit.name}
                         />
                       ) : (
-                        <span className="font-medium text-gray-900">{translate(product.name, language)}</span>
+                        <span className="font-medium text-gray-900">
+                          {translate(sanitizeProductName(product.name), language)}
+                        </span>
                       )}
                     </td>
                     <td className="px-6 py-4" aria-label={`Category: ${product.category || "None"}`}>
@@ -232,22 +243,6 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
                           {product.category ? translate(product.category, language) : "—"}
                         </span>
                       )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <Select
-                          value={product.active ? "active" : "inactive"}
-                          onValueChange={() => handleToggleActive(product)}
-                        >
-                          <SelectTrigger className="w-[120px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="active">{translate("Active", language)}</SelectItem>
-                            <SelectItem value="inactive">{translate("Inactive", language)}</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
                     </td>
                     <td className="px-6 py-4 text-right">
                       {editId === product.id ? (

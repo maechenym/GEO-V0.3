@@ -12,7 +12,7 @@ import type { CheckoutPlan } from "@/store/checkout.store"
 import { useLanguageStore } from "@/store/language.store"
 import { translate } from "@/lib/i18n"
 import apiClient from "@/services/api"
-import { usePlanStore } from "@/store/plan.store"
+import { usePlanStore, mapPlanIdToPlanType } from "@/store/plan.store"
 
 interface UpgradeCardProps {
   plan: CheckoutPlan
@@ -61,7 +61,7 @@ export function UpgradeCard({ plan, currentPlanId }: UpgradeCardProps) {
         trialEndsAt.setDate(trialEndsAt.getDate() + 30) // 30天周期
         
         setPlan({
-          planType: plan.planId === "basic" ? "pro" : plan.planId === "advanced" ? "pro" : "enterprise",
+          planType: mapPlanIdToPlanType(plan.planId),
           trialEndsAt: trialEndsAt.toISOString(),
         })
         

@@ -10,6 +10,7 @@ import type {
   OverviewSource,
   OverviewTopic,
 } from "@/types/overview"
+import { toTraditional } from "@/lib/i18n"
 
 const MODEL_KEY_MAP: Record<string, string> = {
   all: "overall",
@@ -18,7 +19,7 @@ const MODEL_KEY_MAP: Record<string, string> = {
   claude: "claude",
 }
 
-const SELF_BRAND_CANDIDATES = ["英业达", "英業達", "Your Brand", "Inventec"]
+const SELF_BRAND_CANDIDATES = ["英业达", "Inventec"]
 
 const getModelKey = (modelParam: string | null): string => {
   if (!modelParam) return "overall"
@@ -52,7 +53,8 @@ const computeTopSources = (
   filteredData: Array<[string, any]>,
   modelKey: string,
   fallbackModelKey: string,
-  selfBrandKey: string
+  selfBrandKey: string,
+  language: string = "en"
 ): OverviewSource[] => {
   const domainMap = new Map<
     string,
@@ -67,28 +69,35 @@ const computeTopSources = (
   filteredData.forEach(([_, day]) => {
     const modelData = day?.[modelKey] ?? day?.[fallbackModelKey] ?? day?.overall
     const brandDomains = modelData?.brand_domains as Record<string, string[] | undefined>
-    if (!brandDomains) return
+    if (!brandDomains || typeof brandDomains !== "object") return
 
     Object.entries(brandDomains).forEach(([brand, domains]) => {
       if (!Array.isArray(domains)) return
+      const translatedBrand = language === "zh-TW" ? toTraditional(brand) : brand
       domains.forEach((rawDomain) => {
         if (!rawDomain || typeof rawDomain !== "string") return
         const trimmedDomain = rawDomain.trim()
         if (!trimmedDomain) return
+        
+        // 去重：使用小写域名作为key，但保留原始域名格式
         const key = trimmedDomain.toLowerCase()
         const existing = domainMap.get(key)
         if (existing) {
+          // 域名已存在，增加计数
           existing.mentionCount += 1
-          if (brand === selfBrandKey) {
+          // 如果当前品牌是本品牌，标记为提及本品牌
+          if (brand === selfBrandKey || translatedBrand === selfBrandKey) {
             existing.mentionsSelf = true
           }
         } else {
+          // 新域名，添加到map
           domainMap.set(key, {
-            domain: trimmedDomain,
+            domain: trimmedDomain, // 保留原始格式（包括大小写）
             mentionCount: 1,
-            mentionsSelf: brand === selfBrandKey,
+            mentionsSelf: brand === selfBrandKey || translatedBrand === selfBrandKey,
           })
         }
+        // 总提及次数（用于计算比例）
         totalMentions += 1
       })
     })
@@ -112,135 +121,112 @@ const computeTopTopics = (
   fallbackModelKey: string,
   selfBrandKey: string
 ): OverviewTopic[] => {
-  // 固定的 6 个主题，与 Intent 页面同步
-  const fixedTopics = [
-    "Performance and Architecture",
-    "Cooling, Power Efficiency and High-Density Deployment",
-    "Data Center-Grade Stability and High Availability",
-    "AI, Deep Learning and High-Performance Computing Applications",
-    "Edge Computing and Private Cloud / Hybrid Cloud Deployment",
-    "Security, Maintenance and Remote Management",
-  ]
-
-  // 计算每个主题的提及次数（从数据中提取相关关键词）
+  // 从数据中真实提取主题（从所有品牌的aspects中提取）
   const topicMap = new Map<string, number>()
-  
-  // 初始化所有主题
-  fixedTopics.forEach((topic) => {
-    topicMap.set(topic, 0)
-  })
+  let totalAspects = 0
 
-  // 从数据中提取相关主题的提及次数
+  // 从数据中提取所有aspects，统计每个aspect的出现次数
   filteredData.forEach(([_, day]) => {
     const modelData = day?.[modelKey] ?? day?.[fallbackModelKey] ?? day?.overall
-    const aggregated = modelData?.aggregated_sentiment_detail?.[selfBrandKey]
-    if (!aggregated) return
+    const aggregated = modelData?.aggregated_sentiment_detail
+    if (!aggregated || typeof aggregated !== "object") return
 
-    const positiveAspects = Array.isArray(aggregated.positive_aspects) ? aggregated.positive_aspects : []
-    const negativeAspects = Array.isArray(aggregated.negative_aspects) ? aggregated.negative_aspects : []
-
-    // 将提取的 aspects 映射到固定主题
-    ;[...positiveAspects, ...negativeAspects].forEach((aspect) => {
-      if (!aspect || typeof aspect !== "string") return
-      const trimmed = aspect.trim().toLowerCase()
-      if (!trimmed) return
+    // 遍历所有品牌的aspects
+    Object.values(aggregated).forEach((brandData: any) => {
+      if (!brandData || typeof brandData !== "object") return
       
-      // 简单的关键词匹配逻辑
-      if (trimmed.includes("performance") || trimmed.includes("architecture") || trimmed.includes("架构") || trimmed.includes("性能")) {
-        topicMap.set(fixedTopics[0], (topicMap.get(fixedTopics[0]) || 0) + 1)
-      } else if (trimmed.includes("cooling") || trimmed.includes("power") || trimmed.includes("density") || trimmed.includes("散热") || trimmed.includes("能耗") || trimmed.includes("高密度")) {
-        topicMap.set(fixedTopics[1], (topicMap.get(fixedTopics[1]) || 0) + 1)
-      } else if (trimmed.includes("stability") || trimmed.includes("availability") || trimmed.includes("reliability") || trimmed.includes("稳定性") || trimmed.includes("高可用")) {
-        topicMap.set(fixedTopics[2], (topicMap.get(fixedTopics[2]) || 0) + 1)
-      } else if (trimmed.includes("ai") || trimmed.includes("deep learning") || trimmed.includes("hpc") || trimmed.includes("gpu") || trimmed.includes("人工智能") || trimmed.includes("深度学习") || trimmed.includes("高性能计算")) {
-        topicMap.set(fixedTopics[3], (topicMap.get(fixedTopics[3]) || 0) + 1)
-      } else if (trimmed.includes("edge") || trimmed.includes("cloud") || trimmed.includes("hybrid") || trimmed.includes("边缘计算") || trimmed.includes("私有云") || trimmed.includes("混合云")) {
-        topicMap.set(fixedTopics[4], (topicMap.get(fixedTopics[4]) || 0) + 1)
-      } else if (trimmed.includes("security") || trimmed.includes("maintenance") || trimmed.includes("remote") || trimmed.includes("management") || trimmed.includes("安全性") || trimmed.includes("维护") || trimmed.includes("远程管理")) {
-        topicMap.set(fixedTopics[5], (topicMap.get(fixedTopics[5]) || 0) + 1)
-      }
+      const positiveAspects = Array.isArray(brandData.positive_aspects) ? brandData.positive_aspects : []
+      const negativeAspects = Array.isArray(brandData.negative_aspects) ? brandData.negative_aspects : []
+
+      // 统计每个aspect的出现次数（作为主题）
+      ;[...positiveAspects, ...negativeAspects].forEach((aspect) => {
+        if (!aspect || typeof aspect !== "string") return
+        const trimmed = aspect.trim()
+        if (!trimmed) return
+        
+        // 使用aspect本身作为主题名
+        const topicName = trimmed
+        topicMap.set(topicName, (topicMap.get(topicName) || 0) + 1)
+        totalAspects += 1
+      })
     })
   })
 
-  // 如果没有匹配到数据，给每个主题分配一个基础值，确保它们都显示
-  const totalMentions = Array.from(topicMap.values()).reduce((sum, count) => sum + count, 0)
-  if (totalMentions === 0) {
-    // 如果没有数据，给每个主题分配一个基础提及次数
-    fixedTopics.forEach((topic, index) => {
-      topicMap.set(topic, 10 - index) // 第一个主题10次，第二个9次，以此类推
-    })
+  // 如果没有任何数据，返回空数组
+  if (topicMap.size === 0) {
+    return []
   }
 
-  const finalTotalMentions = Array.from(topicMap.values()).reduce((sum, count) => sum + count, 0)
-
-  return fixedTopics
-    .map((topic) => ({
+  // 构建topics数组，按提及次数从高到低排序
+  const topicsWithData = Array.from(topicMap.entries())
+    .map(([topic, mentionCount]) => ({
       topic,
-      mentionCount: topicMap.get(topic) || 0,
-      mentionShare: finalTotalMentions > 0 ? (topicMap.get(topic) || 0) / finalTotalMentions : 0,
+      mentionCount,
     }))
-    .sort((a, b) => b.mentionCount - a.mentionCount)
-    .slice(0, 6) // 返回前 6 个主题
+    .sort((a, b) => b.mentionCount - a.mentionCount) // 按提及次数从高到低排序
+
+  // 计算总提及次数（用于计算占比）
+  const finalTotalMentions = topicsWithData.reduce((sum, item) => sum + item.mentionCount, 0)
+
+  // 返回热门topics：按占比从高到低排序，最多返回前5个最热门的
+  return topicsWithData
+    .map((item) => ({
+      topic: item.topic,
+      mentionCount: item.mentionCount,
+      mentionShare: finalTotalMentions > 0 ? item.mentionCount / finalTotalMentions : 0,
+    }))
+    .slice(0, 5) // 只返回前5个最热门的topics
+}
+
+// 翻译函数：根据语言参数翻译数据
+const translateData = (data: any, language: string): any => {
+  if (language !== "zh-TW") {
+    return data // 如果不是繁体中文，直接返回
+  }
+  
+  if (typeof data === "string") {
+    return toTraditional(data)
+  }
+  
+  if (Array.isArray(data)) {
+    return data.map(item => translateData(item, language))
+  }
+  
+  if (data && typeof data === "object") {
+    const translated: any = {}
+    for (const [key, value] of Object.entries(data)) {
+      // 翻译键名（如果是品牌名等）
+      const translatedKey = toTraditional(key)
+      translated[translatedKey] = translateData(value, language)
+    }
+    return translated
+  }
+  
+  return data
 }
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
-    const startDate = searchParams.get("startDate") || "2025-10-31"
-    const endDate = searchParams.get("endDate") || "2025-11-06"
+    const startDate = searchParams.get("startDate") || "2025-11-08"
+    const endDate = searchParams.get("endDate") || "2025-11-14"
     const productId = searchParams.get("productId")
     const brandId = searchParams.get("brandId")
     const modelParam = searchParams.get("model")
+    const language = searchParams.get("language") || "en"
     const modelKey = getModelKey(modelParam)
 
-    // 读取JSON文件
+    // 读取JSON文件 - 只使用新文件
     const projectRoot = process.cwd()
-    // 优先从项目目录读取（生产环境可用）
-    const projectDataPath = path.resolve(projectRoot, "data", "all_brands_results_20251106_075334.json")
-    const jsonFilePath = path.resolve(projectRoot, "..", "all_brands_results_20251106_075334.json")
-    const downloadsPath = path.resolve("/Users/yimingchen/Downloads", "all_brands_results_20251106_075334.json")
-    const altPath = path.resolve(projectRoot, "documents", "all_brands_results_20251106_075334.json")
+    const dataPath = path.resolve(projectRoot, "data", "all_products_results_20251114_021851.json")
     
     let fileContents: string = ""
-    let loadedPath: string | null = null
     
-    // 按优先级尝试读取文件（项目目录优先，适用于生产环境）
-    const pathsToTry = [
-      projectDataPath,  // 1. 项目 data 目录（生产环境优先）
-      downloadsPath,    // 2. Downloads文件夹（开发环境）
-      jsonFilePath,     // 3. 项目上级目录
-      altPath,          // 4. documents目录
-    ]
-    
-    for (const tryPath of pathsToTry) {
-      try {
-        fileContents = await fs.readFile(tryPath, "utf8")
-        loadedPath = tryPath
-        console.log(`[Overview API] Successfully loaded JSON from: ${tryPath}`)
-        break
-      } catch (error: any) {
-        // 继续尝试下一个路径
-        continue
-      }
-    }
-    
-    if (!loadedPath || !fileContents) {
-      console.error("[Overview API] Error reading JSON file from all paths:", pathsToTry)
-      // 在生产环境，如果文件不存在，返回空数据而不是错误
-      if (process.env.NODE_ENV === "production") {
-        console.warn("[Overview API] File not found in production, returning empty data")
-        return NextResponse.json({
-          kpis: [],
-          brandInfluence: {
-            current: 0,
-            previousPeriod: 0,
-            changeRate: 0,
-            trend: [],
-          },
-          ranking: [],
-          competitorTrends: {},
-        })
-      }
+    try {
+      fileContents = await fs.readFile(dataPath, "utf8")
+      console.log(`[Overview API] Successfully loaded JSON from: ${dataPath}`)
+    } catch (error: any) {
+      console.error(`[Overview API] Error reading JSON file from: ${dataPath}`, error)
       return NextResponse.json(
         { error: "Failed to read data file" },
         { status: 500 }
@@ -250,7 +236,8 @@ export async function GET(request: Request) {
     const allData = JSON.parse(fileContents)
     
     // 确定要使用的产品名称
-    let productName = "英业达 (Inventec) 机架解决方案" // 默认产品
+    // 新格式: "品牌名 (英文名) | 产品名"
+    let productName = "英业达 (Inventec) | 笔记本电脑代工" // 默认产品
     
     // 如果提供了productId，尝试从产品数据中获取产品名称
     if (productId) {
@@ -266,7 +253,23 @@ export async function GET(request: Request) {
         if (productResponse.ok) {
           const productData = await productResponse.json()
           if (productData.product && productData.product.name) {
-            productName = productData.product.name
+            // 从产品名称构建JSON键名格式
+            // 假设产品名称格式可能是 "机架解决方案" 或 "英业达 (Inventec) 机架解决方案"
+            const productNameFromAPI = productData.product.name
+            const brandName = productData.product.brand?.name || "英业达 (Inventec)"
+            
+            // 构建新格式的键名: "品牌名 | 产品名"
+            if (productNameFromAPI.includes("|")) {
+              // 如果已经包含 |，直接使用
+              productName = productNameFromAPI
+            } else if (productNameFromAPI.includes(brandName)) {
+              // 如果包含品牌名，替换空格为 |
+              productName = productNameFromAPI.replace(/\s+/, " | ")
+            } else {
+              // 如果只有产品名，添加品牌名
+              productName = `${brandName} | ${productNameFromAPI}`
+            }
+            
             console.log(`[Overview API] Using product: ${productName} for productId: ${productId}`)
           }
         } else {
@@ -278,7 +281,21 @@ export async function GET(request: Request) {
       }
     }
     
-    const productData = allData[productName]
+    // 如果直接匹配失败，尝试查找包含该产品名的键
+    let productData = allData[productName]
+    
+    if (!productData && productName.includes("|")) {
+      // 尝试模糊匹配：查找包含品牌和产品名的键
+      const [brandPart, productPart] = productName.split("|").map(s => s.trim())
+      const matchingKey = Object.keys(allData).find(key => {
+        return key.includes(brandPart) && key.includes(productPart)
+      })
+      if (matchingKey) {
+        productName = matchingKey
+        productData = allData[matchingKey]
+        console.log(`[Overview API] Found matching product key: ${matchingKey}`)
+      }
+    }
 
     if (!productData || productData.length === 0) {
       console.error(`[Overview API] Product data not found: ${productName}`)
@@ -772,9 +789,16 @@ export async function GET(request: Request) {
         }
       }
       
+      // 品牌名显示逻辑：本品牌根据语言显示不同名称，其他品牌保持原样
+      let displayName = comp.name
+      if (comp.name === selfBrandKey) {
+        // 本品牌：保持原始名称，前端会根据语言显示"英业达"或"Inventec"
+        displayName = selfBrandKey
+      }
+      
       competitors.push({
         rank: index + 1,
-        name: comp.name === selfBrandKey ? selfBrandKey : comp.name,
+        name: displayName,
         score: parseFloat(currentScore.toFixed(1)), // 大数字显示1位小数
         delta: isOneDayRange ? parseFloat(delta.toFixed(0)) : parseFloat(delta.toFixed(1)),
         isSelf: comp.name === selfBrandKey,
@@ -883,8 +907,31 @@ export async function GET(request: Request) {
     
     console.log(`[Overview API] Final brandInfluence values - current: ${currentInfluence}, previous: ${previousInfluence}, changeRate: ${changeRate}`)
 
-    const sources = computeTopSources(filteredData, modelKey, "overall", selfBrandKey)
+    const sources = computeTopSources(filteredData, modelKey, "overall", selfBrandKey, language)
     const topics = computeTopTopics(filteredData, modelKey, "overall", selfBrandKey)
+
+    // 根据语言参数翻译数据
+    const translatedRanking = competitors.map((item) => ({
+      ...item,
+      name: language === "zh-TW" ? toTraditional(item.name) : item.name,
+    }))
+    
+    const translatedSources = sources.map((source) => ({
+      ...source,
+      domain: language === "zh-TW" ? toTraditional(source.domain) : source.domain,
+    }))
+    
+    const translatedTopics = topics.map((topic) => ({
+      ...topic,
+      topic: language === "zh-TW" ? toTraditional(topic.topic) : topic.topic,
+    }))
+    
+    // 翻译competitorTrends的键名
+    const translatedCompetitorTrends: Record<string, BrandInfluenceData[]> = {}
+    Object.entries(competitorTrends).forEach(([key, value]) => {
+      const translatedKey = language === "zh-TW" ? toTraditional(key) : key
+      translatedCompetitorTrends[translatedKey] = value
+    })
 
     const overviewData: OverviewData = {
       kpis,
@@ -894,11 +941,11 @@ export async function GET(request: Request) {
         changeRate: parseFloat(changeRate.toFixed(1)),
         trend: brandInfluenceTrend,
       },
-      ranking: competitors,
-      sources,
-      topics,
+      ranking: translatedRanking,
+      sources: translatedSources,
+      topics: translatedTopics,
       // 添加竞品趋势数据（如果需要）
-      competitorTrends: competitorTrends,
+      competitorTrends: translatedCompetitorTrends,
       // 添加实际日期范围（用于前端显示）
       actualDateRange: {
         start: actualStartDate,

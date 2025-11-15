@@ -9,61 +9,32 @@ import Link from "next/link"
 import { Mail } from "lucide-react"
 import { useAuthStore } from "@/store/auth.store"
 import apiClient from "@/services/api"
-import { LoginResponseSchema, MagicLinkResponseSchema } from "@/types/auth"
+import { MagicLinkResponseSchema } from "@/types/auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { FormMessage } from "@/components/ui/form-message"
 
-const loginSchema = z.object({
+const magicLinkSchema = z.object({
   email: z.string().min(1, "请输入邮箱地址").email("请输入有效的邮箱地址"),
-  password: z.string().min(1, "请输入密码"),
 })
 
-type LoginForm = z.infer<typeof loginSchema>
+type MagicLinkForm = z.infer<typeof magicLinkSchema>
 
-/**
- * 登录页面
- * 
- * 功能：
- * - Email 输入（必填，Zod 邮箱校验）
- * - Login 按钮（POST /api/auth/login）
- * - Send Magic Link 按钮（POST /api/auth/magic-link）
- * - Continue with Google 按钮
- * 
- * 页面跳转逻辑：
- * - 登录成功后根据 hasBrand/isNew 跳转 /onboarding/brand 或 /overview
- * - 发送 Magic Link 后跳转 /auth/check-inbox
- * - Google 登录跳转 /auth/google
- * - 已登录用户自动跳转 /overview
- */
 export default function LoginPage() {
   const router = useRouter()
-  const { token, profile, loginWithToken, loadProfile } = useAuthStore()
+  const { token, profile } = useAuthStore()
 
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
     setError,
-    watch,
-    getValues,
-  } = useForm<LoginForm>({
-    resolver: zodResolver(loginSchema),
+  } = useForm<MagicLinkForm>({
+    resolver: zodResolver(magicLinkSchema),
     mode: "onChange",
   })
 
-  // Watch form values for debugging
-  const emailValue = watch("email")
-  const passwordValue = watch("password")
-  
-  useEffect(() => {
-    console.log("[Login] Form values changed:", { email: emailValue, password: passwordValue ? "***" : "" })
-  }, [emailValue, passwordValue])
-
-  // 已登录且有品牌的用户重定向到 overview
-  // 已登录但无品牌的用户可以继续访问登录页（可能需要重新登录）
-  // 排除 test1@example.com 和 test1@gmail.com，它们应该跳转到 /analysis-results
   useEffect(() => {
     if (token && profile && profile.hasBrand) {
       const email = profile.email
@@ -75,75 +46,18 @@ export default function LoginPage() {
     }
   }, [token, profile, router])
 
-  // Login 提交
-  const onLogin = async (data: LoginForm) => {
-    try {
-      console.log("[Login] Attempting login with email:", data.email, "password:", data.password ? "***" : "empty")
-      
-      if (!data.email || !data.password) {
-        console.error("[Login] Email or password is empty")
-        setError("root", { message: "请输入邮箱和密码" })
-        return
-      }
-      
-      const response = await apiClient.post("/api/auth/login", { 
-        email: data.email,
-        password: data.password 
-      })
-      console.log("[Login] API response:", response.data)
-      const result = LoginResponseSchema.parse(response.data)
-
-      if (result.ok) {
-        console.log("[Login] Login successful, token received")
-        // 保存 token，建立会话
-        await loginWithToken(result.token)
-        console.log("[Login] Token saved, loading profile...")
-        
-        // 调用 GET /api/auth/session 拉取 profile.hasBrand
-        const profile = await loadProfile()
-        console.log("[Login] Profile loaded:", profile)
-
-        // 特殊处理：test1@example.com 或 test1@gmail.com 跳转到分析结果页面
-        if (data.email === "test1@example.com" || data.email === "test1@gmail.com") {
-          console.log("[Login] Redirecting test1 user to /analysis-results")
-          router.push("/analysis-results")
-          return
-        }
-
-        // 根据 hasBrand 决定跳转
-        if (!profile.hasBrand) {
-          console.log("[Login] No brand, redirecting to /onboarding/brand")
-          router.push("/onboarding/brand")
-        } else {
-          console.log("[Login] Has brand, redirecting to /overview")
-          router.push("/overview")
-        }
-      } else {
-        console.error("[Login] Login failed, result.ok is false")
-        setError("root", { message: "登录失败，请重试" })
-      }
-    } catch (error: unknown) {
-      console.error("[Login] Error during login:", error)
-      const message = error && typeof error === "object" && "message" in error
-        ? String(error.message)
-        : "登录失败，请重试"
-      setError("root", { message })
-    }
-  }
-
-  // Send Magic Link
-  const onSendMagicLink = async (data: LoginForm) => {
+  const onSendMagicLink = async (data: MagicLinkForm) => {
     try {
       const response = await apiClient.post("/api/auth/magic-link", { email: data.email })
       const result = MagicLinkResponseSchema.parse(response.data)
-
       if (result.ok) {
         router.push("/auth/check-inbox")
       }
     } catch (error: unknown) {
-      const message = error && typeof error === "object" && "message" in error
-        ? String(error.message)
-        : "发送失败，请重试"
+      const message =
+        error && typeof error === "object" && "message" in error
+          ? String(error.message)
+          : "发送失败，请重试"
       setError("root", { message })
     }
   }
@@ -160,19 +74,7 @@ export default function LoginPage() {
           <p className="text-muted-foreground">登录你的账户</p>
         </div>
 
-        <form 
-          onSubmit={handleSubmit(
-            (data) => {
-              console.log("[Login] Form validation passed, calling onLogin with data:", data)
-              onLogin(data)
-            },
-            (errors) => {
-              console.error("[Login] Form validation failed:", errors)
-              console.log("[Login] Current form values:", getValues())
-            }
-          )} 
-          className="space-y-6"
-        >
+        <form onSubmit={handleSubmit(onSendMagicLink)} className="space-y-6">
           <div className="space-y-2">
             <Label htmlFor="email">
               Email <span className="text-destructive">*</span>
@@ -190,41 +92,16 @@ export default function LoginPage() {
             <FormMessage message={errors.email?.message} variant="error" />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="password">
-              Password <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="请输入密码"
-              {...register("password")}
-              disabled={isSubmitting}
-              className={errors.password ? "border-destructive" : ""}
-              aria-invalid={!!errors.password}
-              aria-describedby={errors.password ? "password-error" : undefined}
-            />
-            <FormMessage message={errors.password?.message} variant="error" />
+          <div className="space-y-1 text-sm text-muted-foreground">
+            <p>我们会将一次性的 Magic Link 发送到您的邮箱，请在 10 分钟内完成登录。</p>
           </div>
 
           {errors.root && <FormMessage message={errors.root.message} variant="error" />}
 
-          <div className="space-y-3">
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isSubmitting}>
-              {isSubmitting ? "登录中..." : "Login"}
-            </Button>
-
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={handleSubmit(onSendMagicLink)}
-              disabled={isSubmitting}
-            >
-              <Mail className="mr-2 h-4 w-4" />
-              Send Magic Link
-            </Button>
-          </div>
+          <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isSubmitting}>
+            <Mail className="mr-2 h-4 w-4" />
+            {isSubmitting ? "发送中..." : "Send Magic Link"}
+          </Button>
         </form>
 
         <div className="relative">
@@ -236,13 +113,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full"
-          onClick={onGoogleLogin}
-          disabled={isSubmitting}
-        >
+        <Button type="button" variant="outline" className="w-full" onClick={onGoogleLogin} disabled={isSubmitting}>
           <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
             <path
               fill="currentColor"

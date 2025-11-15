@@ -73,7 +73,7 @@ const competitorSchema = z.object({
 type CompetitorForm = z.infer<typeof competitorSchema>
 
 export function CompetitorsCard({ competitors, brandId, productId }: CompetitorsCardProps) {
-  const { markSaved } = useBrandUIStore()
+  const { setDirty } = useBrandUIStore()
   const { language } = useLanguageStore()
 
   // Use product-based mutation if productId is provided, otherwise use brand-based
@@ -126,7 +126,7 @@ export function CompetitorsCard({ competitors, brandId, productId }: Competitors
       })
       reset()
       setAddDialogOpen(false)
-      markSaved()
+      setDirty(true)
     } catch (error) {
       // Error is handled by mutation's onError
       console.error("Failed to add competitor:", error)
@@ -161,14 +161,14 @@ export function CompetitorsCard({ competitors, brandId, productId }: Competitors
     resetEdit()
     setEditId(null)
     setEditingCompetitor(null)
-    markSaved()
+    setDirty(true)
   }
 
   const handleDeleteCompetitor = async () => {
     if (!deleteId) return
     await deleteCompetitorMutation.mutateAsync(deleteId)
     setDeleteId(null)
-    markSaved()
+    setDirty(true)
   }
 
   return (
@@ -203,21 +203,9 @@ export function CompetitorsCard({ competitors, brandId, productId }: Competitors
                 <tr>
                   <th
                     className="px-6 py-4 text-left text-sm font-semibold text-gray-900 border-b border-gray-200"
-                    aria-label="Competitor brand name"
+                    aria-label="Competitor name"
                   >
-                    {translate("Brand", language)}
-                  </th>
-                  <th
-                    className="px-6 py-4 text-left text-sm font-semibold text-gray-900 border-b border-gray-200"
-                    aria-label="Competitor product"
-                  >
-                    {translate("Product", language)}
-                  </th>
-                  <th
-                    className="px-6 py-4 text-left text-sm font-semibold text-gray-900 border-b border-gray-200"
-                    aria-label="Competitor region"
-                  >
-                    {translate("Region", language)}
+                    {translate("Competitors", language)}
                   </th>
                   <th
                     className="px-6 py-4 text-right text-sm font-semibold text-gray-900 border-b border-gray-200"
@@ -230,48 +218,53 @@ export function CompetitorsCard({ competitors, brandId, productId }: Competitors
               <tbody className="divide-y divide-gray-200">
                 {competitors.map((competitor) => (
                   <tr key={competitor.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4" aria-label={`Brand: ${competitor.name}`}>
+                    <td className="px-6 py-4" aria-label={`Competitor: ${competitor.name}`}>
                       {editId === competitor.id ? (
-                        <Input
-                          {...registerEdit("name")}
-                          className={errorsEdit.name ? "border-destructive w-full" : "w-full"}
-                          aria-invalid={!!errorsEdit.name}
-                        />
+                        <div className="space-y-3">
+                          <Input
+                            {...registerEdit("name")}
+                            className={errorsEdit.name ? "border-destructive w-full" : "w-full"}
+                            aria-invalid={!!errorsEdit.name}
+                            placeholder={translate("Competitor Name", language)}
+                          />
+                          <Input
+                            {...registerEdit("product")}
+                            placeholder={translate("Product", language)}
+                            className="w-full"
+                          />
+                          <Controller
+                            name="region"
+                            control={controlEdit}
+                            render={({ field }) => (
+                              <Select value={field.value || ""} onValueChange={field.onChange}>
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder={translate("Region", language)} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {REGIONS.map((region) => (
+                                    <SelectItem key={region} value={region}>
+                                      {region}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          />
+                        </div>
                       ) : (
-                        <span className="font-medium text-gray-900">{translate(competitor.name, language)}</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4" aria-label={`Product: ${competitor.product || "None"}`}>
-                      {editId === competitor.id ? (
-                        <Input {...registerEdit("product")} placeholder="Product" className="w-full" />
-                      ) : (
-                        <span className="text-sm text-muted-foreground">
-                          {competitor.product ? translate(competitor.product, language) : "—"}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4" aria-label={`Region: ${competitor.region || "None"}`}>
-                      {editId === competitor.id ? (
-                        <Controller
-                          name="region"
-                          control={controlEdit}
-                          render={({ field }) => (
-                            <Select value={field.value || ""} onValueChange={field.onChange}>
-                              <SelectTrigger className="w-[180px]">
-                                <SelectValue placeholder="Select region" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {REGIONS.map((region) => (
-                                  <SelectItem key={region} value={region}>
-                                    {region}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                        <div className="space-y-1">
+                          <span className="font-medium text-gray-900">
+                            {translate(competitor.name, language)}
+                          </span>
+                          {(competitor.product || competitor.region) && (
+                            <div className="text-xs text-muted-foreground flex flex-wrap gap-2">
+                              {competitor.product && (
+                                <span>{translate(competitor.product, language)}</span>
+                              )}
+                              {competitor.region && <span>{competitor.region}</span>}
+                            </div>
                           )}
-                        />
-                      ) : (
-                        <span className="text-sm text-muted-foreground">{competitor.region || "—"}</span>
+                        </div>
                       )}
                     </td>
                     <td className="px-6 py-4 text-right">

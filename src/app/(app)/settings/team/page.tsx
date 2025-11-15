@@ -42,13 +42,16 @@ function getMemberLimits(planType: string | null): {
   if (planType === "trial" || planType === null) {
     return { maxAdmins: 1, maxMembers: 0, total: 1 }
   }
+  if (planType === "basic") {
+    return { maxAdmins: 1, maxMembers: 2, total: 3 }
+  }
   if (planType === "pro") {
     return { maxAdmins: 2, maxMembers: 5, total: 7 }
   }
   if (planType === "enterprise") {
     return { maxAdmins: 3, maxMembers: 10, total: 13 }
   }
-  // Default to basic (1 admin + 2 members)
+  // Fallback to basic limits
   return { maxAdmins: 1, maxMembers: 2, total: 3 }
 }
 

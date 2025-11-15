@@ -90,11 +90,28 @@ export interface SentimentRankingItem {
   isSelf: boolean
 }
 
+export interface SentimentSourceDistribution {
+  type: string
+  pos: number
+  neu: number
+  neg: number
+}
+
+export interface SentimentTopicSummary {
+  topic: string
+  sentiment: number
+  score: number
+  mentions: number
+}
+
 export interface SentimentData {
   kpis: SentimentKPIs
   trends: SentimentTrendData[]
   ranking: SentimentRankingItem[]
   riskTopics: RiskTopic[]
+  sourcesDistribution?: SentimentSourceDistribution[]
+  positiveTopics?: SentimentTopicSummary[]
+  negativeTopics?: SentimentTopicSummary[]
   actualDateRange?: {
     start: string // YYYY-MM-DD
     end: string // YYYY-MM-DD

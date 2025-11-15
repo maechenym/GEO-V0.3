@@ -6,7 +6,7 @@ import { persist } from "zustand/middleware"
  * 
  * 管理订阅计划状态
  */
-export type PlanType = "trial" | "pro" | "enterprise" | null
+export type PlanType = "trial" | "basic" | "pro" | "enterprise" | null
 
 interface PlanState {
   planType: PlanType
@@ -28,16 +28,46 @@ export const usePlanStore = create<PlanState>()(
         switch (planType) {
           case "trial":
             return 1
+          case "basic":
+            return 3
           case "pro":
-            return 10
+            return 9
           case "enterprise":
-            return 100
+            return 20
           default:
-            return 3 // basic
+            return 3 // 默认 Basic 限制
         }
       },
     }),
     { name: "plan-store" }
   )
 )
+
+export const mapPlanIdToPlanType = (planId?: string | null): PlanType => {
+  switch (planId) {
+    case "free":
+      return "trial"
+    case "basic":
+      return "basic"
+    case "advanced":
+    case "pro":
+      return "pro"
+    case "enterprise":
+      return "enterprise"
+    default:
+      return null
+  }
+}
+
+export const derivePlanTypeFromSubscription = (
+  planId?: string | null,
+  status?: string | null
+): PlanType => {
+  const mapped = mapPlanIdToPlanType(planId)
+  if (mapped) return mapped
+  if (status === "trial") {
+    return "trial"
+  }
+  return null
+}
 

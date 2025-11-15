@@ -9,6 +9,7 @@ import { persist } from "zustand/middleware"
 interface BrandUIState {
   selectedBrandId: string | null
   selectedProductId: string | null
+  savedProductId: string | null
   isDirty: boolean
   lastSavedAt: string | null
   setSelectedBrand: (id: string | null) => void
@@ -23,16 +24,29 @@ export const useBrandUIStore = create<BrandUIState>()(
     (set) => ({
       selectedBrandId: null,
       selectedProductId: null,
+      savedProductId: null,
       isDirty: false,
       lastSavedAt: null,
-      setSelectedBrand: (id) => set({ selectedBrandId: id, selectedProductId: null }), // Reset product when brand changes
+      setSelectedBrand: (id) =>
+        set({
+          selectedBrandId: id,
+          selectedProductId: null,
+          savedProductId: null,
+          isDirty: false,
+        }), // Reset product when brand changes
       setSelectedProduct: (id) => set({ selectedProductId: id }),
       setDirty: (b) => set({ isDirty: b }),
-      markSaved: () => set({ isDirty: false, lastSavedAt: new Date().toISOString() }),
+      markSaved: () =>
+        set((state) => ({
+          isDirty: false,
+          lastSavedAt: new Date().toISOString(),
+          savedProductId: state.selectedProductId ?? state.savedProductId,
+        })),
       reset: () =>
         set({
           selectedBrandId: null,
           selectedProductId: null,
+          savedProductId: null,
           isDirty: false,
           lastSavedAt: null,
         }),

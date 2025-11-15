@@ -88,7 +88,6 @@ export function BrandInfoCard({
 
   const [isEditing, setIsEditing] = useState(false)
   const [name, setName] = useState(brand?.name || "")
-  const [description, setDescription] = useState(brand?.description || "")
 
   // Product management state
   const [addDialogOpen, setAddDialogOpen] = useState(false)
@@ -136,12 +135,10 @@ export function BrandInfoCard({
   useEffect(() => {
     if (brand) {
       setName(brand.name || "")
-      setDescription(brand.description || "")
     }
   }, [brand])
 
-  const hasChanges =
-    name !== (brand?.name || "") || description !== (brand?.description || "")
+  const hasChanges = name !== (brand?.name || "")
 
   // Track dirty state
   useEffect(() => {
@@ -161,7 +158,6 @@ export function BrandInfoCard({
       id: brand.id,
       data: {
         name: name.trim(),
-        description: description.trim() || null,
       },
     })
 
@@ -171,7 +167,6 @@ export function BrandInfoCard({
 
   const handleCancel = () => {
     setName(brand?.name || "")
-    setDescription(brand?.description || "")
     setIsEditing(false)
     markSaved()
   }

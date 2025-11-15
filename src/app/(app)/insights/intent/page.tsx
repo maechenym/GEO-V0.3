@@ -26,15 +26,17 @@ import {
 import { PageHeaderFilterBar } from "@/components/filters/PageHeaderFilterBar"
 import { FadeUp, StaggerContainer, staggerItem } from "@/lib/animations"
 import { mockIntentKpis, mockTopicRows, simulateLoad } from "@/mocks/intent"
-import { IntentFilters, TopicRow, SortKey, PromptItem } from "@/types/intent"
+import { IntentFilters, TopicRow, SortKey, PromptItem, IntentKpis } from "@/types/intent"
 import { useBrandUIStore } from "@/store/brand-ui.store"
 import { useLanguageStore } from "@/store/language.store"
 import { translate, getTooltipContent } from "@/lib/i18n"
-import { getDefaultDateRange, getUserRegisteredAt, getTodayShanghai } from "@/lib/date-utils"
+import { getDefaultDateRange, getUserRegisteredAt, getTodayShanghai, formatDateShanghai } from "@/lib/date-utils"
 import { INK_COLORS, CHART_PRIMARY_COLOR } from "@/lib/design-tokens"
 import { MODEL_OPTIONS } from "@/constants/models"
 import type { ModelOptionValue } from "@/constants/models"
 import { useSearchParams } from "next/navigation"
+import { useQuery } from "@tanstack/react-query"
+import apiClient from "@/services/api"
 
 const todayStr = () => new Date().toISOString().slice(0, 10)
 const daysAgoStr = (n: number) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10)
@@ -50,9 +52,17 @@ export default function IntentPage() {
   )
 
   // Date range state
-  const [dateRange, setDateRange] = useState(getDefaultDateRange())
+  // 使用数据文件的日期范围：2025-11-08 到 2025-11-14
+  const [dateRange, setDateRange] = useState(() => {
+    const start = new Date("2025-11-08")
+    const end = new Date("2025-11-14")
+    return { start, end }
+  })
   const minDate = useMemo(() => getUserRegisteredAt(30), [])
-  const maxDate = useMemo(() => getTodayShanghai(), [])
+  const maxDate = useMemo(() => {
+    // 使用数据文件的最后日期
+    return new Date("2025-11-14")
+  }, [])
 
   // Filters state
   const [filters, setFilters] = useState<IntentFilters>({
@@ -82,10 +92,6 @@ export default function IntentPage() {
   }
 
   // Data state
-  const [kpis, setKpis] = useState<typeof mockIntentKpis | null>(null)
-  const [rows, setRows] = useState<TopicRow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>("topicHot")
 
   // Detail drawer
@@ -102,18 +108,47 @@ export default function IntentPage() {
     order: "asc" | "desc"
   }>({ column: null, order: "asc" })
 
-  // Load data
-  useEffect(() => {
-    setLoading(true)
-    setError(null)
-    Promise.all([simulateLoad(mockIntentKpis, 400), simulateLoad(mockTopicRows, 600)])
-      .then(([k, r]) => {
-        setKpis(k)
-        setRows(r)
-      })
-      .catch((e) => setError(e))
-      .finally(() => setLoading(false))
-  }, [])
+  // Fetch data from API
+  const { data: apiData, isLoading: loading, error: apiError } = useQuery<{
+    kpis: IntentKpis
+    topics: TopicRow[]
+    actualDateRange?: { start: string; end: string }
+  }>({
+    queryKey: [
+      "intent",
+      formatDateShanghai(dateRange.start),
+      formatDateShanghai(dateRange.end),
+      selectedProductId,
+      selectedModel,
+    ],
+    queryFn: async () => {
+      try {
+        const response = await apiClient.get("/api/intent", {
+          params: {
+            startDate: formatDateShanghai(dateRange.start),
+            endDate: formatDateShanghai(dateRange.end),
+            productId: selectedProductId || undefined,
+            model: selectedModel || "all",
+          },
+        })
+        return response.data
+      } catch (error: any) {
+        console.error("[Intent] API error:", error)
+        // Fallback to mock data
+        return {
+          kpis: mockIntentKpis,
+          topics: mockTopicRows,
+        }
+      }
+    },
+    enabled: true,
+    staleTime: 30000, // 30 seconds
+  })
+
+  // Use API data or fallback to mock
+  const kpis = apiData?.kpis || null
+  const rows = apiData?.topics || []
+  const error = apiError ? new Error(apiError.message) : null
 
   // Sorting
   const sortedRows = useMemo(() => {

@@ -180,7 +180,7 @@ export default function OverviewPage() {
   const { selectedProductId, selectedBrandId } = useBrandUIStore()
 
   // Initialize date range from URL or default
-  // Ensure the initial range is within data file bounds (2025-10-31 to 2025-11-06)
+  // Ensure the initial range is within data file bounds (2025-11-08 to 2025-11-14)
   const initialDateRange = useMemo(() => {
     const startParam = searchParams.get("start")
     const endParam = searchParams.get("end")
@@ -190,24 +190,24 @@ export default function OverviewPage() {
         const parsedStart = parseDateShanghai(startParam)
         const parsedEnd = parseDateShanghai(endParam)
         // Ensure dates are within data file bounds
-        const dataMinDate = parseDateShanghai("2025-10-31")
-        const dataMaxDate = parseDateShanghai("2025-11-06")
+        const dataMinDate = parseDateShanghai("2025-11-08")
+        const dataMaxDate = parseDateShanghai("2025-11-14")
         return {
           start: parsedStart < dataMinDate ? dataMinDate : parsedStart > dataMaxDate ? dataMaxDate : parsedStart,
           end: parsedEnd > dataMaxDate ? dataMaxDate : parsedEnd < dataMinDate ? dataMinDate : parsedEnd,
         }
       } catch {
-        // Default: last 7 days within data file (2025-10-31 to 2025-11-06)
+        // Default: last 7 days within data file (2025-11-08 to 2025-11-14)
         return {
-          start: parseDateShanghai("2025-10-31"),
-          end: parseDateShanghai("2025-11-06"),
+          start: parseDateShanghai("2025-11-08"),
+          end: parseDateShanghai("2025-11-14"),
         }
       }
     }
-    // Default: last 7 days within data file (2025-10-31 to 2025-11-06)
+    // Default: last 7 days within data file (2025-11-08 to 2025-11-14)
     return {
-      start: parseDateShanghai("2025-10-31"),
-      end: parseDateShanghai("2025-11-06"),
+      start: parseDateShanghai("2025-11-08"),
+      end: parseDateShanghai("2025-11-14"),
     }
   }, [searchParams])
 
@@ -224,12 +224,12 @@ export default function OverviewPage() {
 
   // Get user registered date (fallback to 30 days ago)
   const minDate = useMemo(() => getUserRegisteredAt(30), [])
-  // Use data file's last date (2025-11-06) as maxDate instead of "today"
+  // Use data file's last date (2025-11-14) as maxDate instead of "today"
   // This ensures date range selections don't exceed available data
   const maxDate = useMemo(() => {
-    // Data file contains dates from 2025-10-31 to 2025-11-06
-    // Use 2025-11-06 as the maximum date
-    return parseDateShanghai("2025-11-06")
+    // Data file contains dates from 2025-11-08 to 2025-11-14
+    // Use 2025-11-14 as the maximum date
+    return parseDateShanghai("2025-11-14")
   }, [])
 
   // Fetch data from API
@@ -255,6 +255,7 @@ export default function OverviewPage() {
             productId: selectedProductId || undefined,
             brandId: selectedBrandId || undefined,
             model: selectedModel,
+            language: language, // 传递语言参数
           },
         })
         
@@ -291,8 +292,8 @@ export default function OverviewPage() {
   // Initialize visible brands
   useEffect(() => {
     if (brands.length > 0 && visibleBrands.size === 0) {
-      const selfBrand = brands.find((b) => b === "英业达" || b === "Your Brand")
-      const otherBrands = brands.filter((b) => b !== "英业达" && b !== "Your Brand")
+      const selfBrand = brands.find((b) => b === "英业达" || b === "Inventec" || b === "Your Brand")
+      const otherBrands = brands.filter((b) => b !== "英业达" && b !== "Inventec" && b !== "Your Brand")
       const initialBrands = selfBrand
         ? [selfBrand, ...otherBrands.slice(0, MAX_VISIBLE_BRANDS - 1)]
         : otherBrands.slice(0, MAX_VISIBLE_BRANDS)
@@ -301,7 +302,7 @@ export default function OverviewPage() {
   }, [brands, visibleBrands.size, MAX_VISIBLE_BRANDS])
 
   const isSelfBrand = (brand: string) => {
-    return brand === "Your Brand" || brand === "英业达"
+    return brand === "Your Brand" || brand === "英业达" || brand === "Inventec"
   }
 
   const canAddBrand = visibleBrands.size < MAX_VISIBLE_BRANDS
@@ -312,12 +313,19 @@ export default function OverviewPage() {
     return brand.charAt(0).toUpperCase()
   }
 
-  // Get self brand name from API data
+  // Get self brand name from API data - 根据语言显示中文或英文
   const selfBrandName = useMemo(() => {
     if (!apiData?.ranking) return null
     const selfBrand = apiData.ranking.find((c) => c.isSelf)
-    return selfBrand?.name || null
-  }, [apiData])
+    if (!selfBrand) return null
+    
+    // 根据语言显示不同的品牌名
+    const rawName = selfBrand.name
+    if (rawName === "英业达" || rawName === "Inventec") {
+      return language === "zh-TW" ? "英业达" : "Inventec"
+    }
+    return rawName
+  }, [apiData, language])
 
   // Use API data - prepare chart data for self brand and selected competitors
   const chartData = useMemo(() => {
@@ -379,6 +387,33 @@ export default function OverviewPage() {
       .map((c) => c.name)
       .filter((name) => !selectedCompetitors.includes(name))
   }, [apiData?.ranking, selfBrandName, selectedCompetitors])
+
+  // Competitor colors - same as chart colors
+  const competitorColors = [
+    "#3B82F6",  // Blue
+    "#16A34A",  // Green
+    "#F59E0B",  // Orange/Amber
+    "#EF4444",  // Red
+    "#8B5CF6",  // Purple
+    "#EC4899",  // Pink
+    "#14B8A6",  // Teal
+    "#F97316",  // Orange
+  ]
+
+  // Get competitor color by index
+  const getCompetitorColor = (competitorName: string) => {
+    const index = selectedCompetitors.indexOf(competitorName)
+    if (index === -1) return competitorColors[0]
+    return competitorColors[index % competitorColors.length]
+  }
+
+  // Convert hex color to RGB for background with opacity
+  const hexToRgba = (hex: string, opacity: number = 0.1) => {
+    const r = parseInt(hex.slice(1, 3), 16)
+    const g = parseInt(hex.slice(3, 5), 16)
+    const b = parseInt(hex.slice(5, 7), 16)
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`
+  }
 
   const data: OverviewData | null = useMemo(() => {
     if (!apiData) return null
@@ -553,7 +588,7 @@ export default function OverviewPage() {
     const cards: (OverviewPrimaryCard | null)[] = [
       {
         key: "brand-influence",
-        label: language === "zh-TW" ? "品牌影響力" : "Brand Influence",
+        label: translate("Brand influence", language),
         tooltipKey: "Brand influence",
         value: data.brandInfluence?.current ?? null,
         delta: data.brandInfluence?.changeRate ?? null,
@@ -564,7 +599,7 @@ export default function OverviewPage() {
       visibilityMetric
         ? {
             key: "visibility",
-            label: language === "zh-TW" ? "可見度" : "Visibility",
+            label: translate("Visibility", language),
             tooltipKey: "Visibility",
             value: visibilityMetric.value,
             unit: visibilityMetric.unit,
@@ -577,7 +612,7 @@ export default function OverviewPage() {
       sentimentMetric
         ? {
             key: "sentiment",
-            label: language === "zh-TW" ? "情緒" : "Sentiment",
+            label: translate("Sentiment", language),
             tooltipKey: "Sentiment",
             value: sentimentMetric.value,
             unit: sentimentMetric.unit,
@@ -641,12 +676,8 @@ export default function OverviewPage() {
       <div className="bg-background -mx-6">
         {/* Top Filter Bar */}
         <PageHeaderFilterBar
-          title="Overview"
-          description={
-            language === "zh-TW" 
-              ? "根據品牌在 AI 檢索中的可見度與情緒傾向，綜合衡量其整體影響力"
-              : "Measure your brand's overall influence through its visibility and sentiment in AI search"
-          }
+          title={translate("Overview", language)}
+          description={translate("Measure your brand's overall influence through its visibility and sentiment in AI search", language)}
           startDate={displayDateRange.start}
           endDate={displayDateRange.end}
           onDateChange={handleDateRangeChange}
@@ -748,7 +779,7 @@ export default function OverviewPage() {
                 <div className="rounded-lg border border-ink-200 bg-white p-4 shadow-subtle hover:shadow-md transition-shadow">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-semibold text-ink-900">Brand influence</h2>
+                      <h2 className="text-sm font-semibold text-ink-900">{translate("Brand influence", language)}</h2>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <button className="text-ink-400 hover:text-ink-600 transition-colors">
@@ -756,7 +787,7 @@ export default function OverviewPage() {
                           </button>
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p className="text-xs">{getTooltipContent("Brand influence", language)}</p>
+                          <p className="text-xs">{getTooltipContent("Brand influence_tooltip", language)}</p>
                         </TooltipContent>
                       </Tooltip>
                     </div>
@@ -775,23 +806,45 @@ export default function OverviewPage() {
                           </Badge>
                         )}
                         {/* Selected Competitors - Can be removed */}
-                        {selectedCompetitors.map((competitor) => (
-                          <Badge
-                            key={competitor}
-                            variant="secondary"
-                            className="bg-brand-50 text-brand-700 border-brand-200 flex items-center gap-1.5"
-                          >
-                            <span className="text-xs">{competitor}</span>
-                            <button
-                              onClick={() => {
-                                setSelectedCompetitors(selectedCompetitors.filter((c) => c !== competitor))
+                        {selectedCompetitors.map((competitor) => {
+                          const competitorColor = getCompetitorColor(competitor)
+                          const bgColor = hexToRgba(competitorColor, 0.15)
+                          const borderColor = hexToRgba(competitorColor, 0.3)
+                          const textColor = competitorColor
+                          const hoverBgColor = hexToRgba(competitorColor, 0.25)
+                          
+                          return (
+                            <Badge
+                              key={competitor}
+                              variant="secondary"
+                              className="flex items-center gap-1.5 border"
+                              style={{
+                                backgroundColor: bgColor,
+                                borderColor: borderColor,
+                                color: textColor,
                               }}
-                              className="hover:bg-brand-100 rounded-full p-0.5 transition-colors"
                             >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </Badge>
-                        ))}
+                              <span className="text-xs font-medium">{competitor}</span>
+                              <button
+                                onClick={() => {
+                                  setSelectedCompetitors(selectedCompetitors.filter((c) => c !== competitor))
+                                }}
+                                className="rounded-full p-0.5 transition-colors"
+                                style={{
+                                  color: textColor,
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.backgroundColor = hoverBgColor
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor = 'transparent'
+                                }}
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          )
+                        })}
                       </div>
                       <Button
                         variant="outline"
@@ -800,7 +853,7 @@ export default function OverviewPage() {
                         className="h-8 px-3 text-xs border-brand-300 text-brand-700 hover:bg-brand-50 flex-shrink-0"
                       >
                         <Plus className="h-3.5 w-3.5 mr-1" />
-                        {language === "zh-TW" ? "添加競品" : "Add Competitor"}
+                        {translate("Add Competitor", language)}
                       </Button>
                     </div>
                     {/* Brand Influence Chart */}
@@ -808,7 +861,7 @@ export default function OverviewPage() {
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart
                           data={chartData}
-                          margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
+                          margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
                         >
                           <CartesianGrid strokeDasharray="3 3" stroke="#EEF2F7" vertical={false} />
                           <XAxis
@@ -854,18 +907,7 @@ export default function OverviewPage() {
                           />
                           {/* Competitor trend lines */}
                           {selectedCompetitors.map((competitor, index) => {
-                            // Use distinct colors for competitors - different from brand color
-                            const competitorColors = [
-                              "#3B82F6",  // Blue
-                              "#16A34A", // Green
-                              "#F59E0B", // Orange/Amber
-                              "#EF4444", // Red
-                              "#8B5CF6", // Purple
-                              "#EC4899", // Pink
-                              "#14B8A6", // Teal
-                              "#F97316", // Orange
-                            ]
-                            const color = competitorColors[index % competitorColors.length]
+                            const color = getCompetitorColor(competitor)
                             return (
                               <Line
                                 key={competitor}
@@ -892,20 +934,16 @@ export default function OverviewPage() {
                 <DialogContent className="sm:max-w-[425px]">
                   <DialogHeader>
                     <DialogTitle>
-                      {language === "zh-TW" ? "添加競品品牌" : "Add Competitor Brand"}
+                      {translate("Add Competitor Brand", language)}
                     </DialogTitle>
                     <DialogDescription>
-                      {language === "zh-TW"
-                        ? "選擇要添加到趨勢圖中的競品品牌"
-                        : "Select competitor brands to add to the trend chart"}
+                      {translate("Select competitor brands to add to the trend chart", language)}
                     </DialogDescription>
                   </DialogHeader>
                   <div className="py-4">
                     {availableCompetitors.length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-4">
-                        {language === "zh-TW"
-                          ? "沒有可用的競品品牌"
-                          : "No available competitor brands"}
+                        {translate("No available competitor brands", language)}
                       </p>
                     ) : (
                       <div className="space-y-2 max-h-[300px] overflow-y-auto">
@@ -929,7 +967,7 @@ export default function OverviewPage() {
                       variant="outline"
                       onClick={() => setAddCompetitorDialogOpen(false)}
                     >
-                      {language === "zh-TW" ? "取消" : "Cancel"}
+                      {translate("Cancel", language)}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -942,7 +980,7 @@ export default function OverviewPage() {
                 <div className="rounded-lg border border-ink-200 bg-white p-4 flex-1 flex flex-col shadow-subtle hover:shadow-md transition-shadow">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-semibold text-ink-900">Influence ranking</h2>
+                      <h2 className="text-sm font-semibold text-ink-900">{translate("Influence ranking", language)}</h2>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <button className="text-ink-400 hover:text-ink-600 transition-colors">
@@ -950,7 +988,7 @@ export default function OverviewPage() {
                           </button>
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p className="text-xs">{getTooltipContent("Influence ranking", language)}</p>
+                          <p className="text-xs">{getTooltipContent("Influence ranking_tooltip", language)}</p>
                         </TooltipContent>
                       </Tooltip>
                     </div>
@@ -1121,7 +1159,7 @@ export default function OverviewPage() {
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <h2 className="text-sm font-semibold text-ink-900">
-                      {language === "zh-TW" ? "引用來源" : "Sources"}
+                      {translate("Sources", language)}
                     </h2>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -1143,7 +1181,7 @@ export default function OverviewPage() {
                     onClick={handleSourcesNavigate}
                     className="text-2xs font-medium text-brand-600 transition-colors hover:text-brand-700"
                   >
-                    {language === "zh-TW" ? "查看詳情" : "View detail"}
+                    {translate("View detail", language)}
                   </button>
                 </div>
                 <div className="space-y-2">
@@ -1180,12 +1218,8 @@ export default function OverviewPage() {
                                   }`}
                                 >
                                   {source.mentionsSelf
-                                    ? language === "zh-TW"
-                                      ? "有提及"
-                                      : "Mentioned"
-                                    : language === "zh-TW"
-                                    ? "未提及"
-                                    : "Not mentioned"}
+                                    ? translate("有提及", language)
+                                    : translate("未提及", language)}
                                 </Badge>
                                 <span className="text-xs font-medium text-ink-500">
                                   {percentage.toFixed(1)}%
@@ -1196,7 +1230,7 @@ export default function OverviewPage() {
                           <TooltipContent>
                             <p className="text-xs">
                               {`${source.mentionCount} ${
-                                language === "zh-TW" ? "次提及" : "mentions"
+                                translate("mentions", language)
                               } • ${percentage.toFixed(1)}%`}
                             </p>
                           </TooltipContent>
@@ -1219,7 +1253,7 @@ export default function OverviewPage() {
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <h2 className="text-sm font-semibold text-ink-900">
-                      {language === "zh-TW" ? "熱門主題" : "Topics"}
+                      {translate("Topics", language)}
                     </h2>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -1241,7 +1275,7 @@ export default function OverviewPage() {
                     onClick={handleTopicsNavigate}
                     className="text-2xs font-medium text-brand-600 transition-colors hover:text-brand-700"
                   >
-                    {language === "zh-TW" ? "查看詳情" : "View detail"}
+                    {translate("View detail", language)}
                   </button>
                 </div>
                 <div className="space-y-2">
@@ -1253,7 +1287,7 @@ export default function OverviewPage() {
                           <TooltipTrigger asChild>
                             <div className="group rounded-md border border-transparent px-3 py-2 transition-colors hover:bg-ink-50">
                               <div className="flex items-start justify-between gap-4">
-                                <div className="min-w-0">
+                                <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-2">
                                     <span className="text-xs font-medium text-ink-400">
                                       {(index + 1).toString().padStart(2, "0")}
@@ -1264,7 +1298,7 @@ export default function OverviewPage() {
                                   </div>
                                   <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-ink-100">
                                     <div
-                                      className="h-full rounded-full bg-brand-600"
+                                      className="h-full rounded-full bg-brand-600 transition-all"
                                       style={{ width: `${percentage}%` }}
                                     />
                                   </div>
@@ -1278,7 +1312,7 @@ export default function OverviewPage() {
                           <TooltipContent>
                             <p className="text-xs">
                               {`${topic.mentionCount} ${
-                                language === "zh-TW" ? "次出現" : "occurrences"
+                                translate("occurrences", language)
                               } • ${percentage.toFixed(1)}%`}
                             </p>
                           </TooltipContent>

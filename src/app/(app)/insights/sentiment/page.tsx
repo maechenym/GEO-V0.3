@@ -28,6 +28,7 @@ import {
 import { differenceInDays } from "date-fns"
 import { exportToCSV, exportToPDF } from "@/lib/export-utils"
 import { useLanguageStore } from "@/store/language.store"
+import { translate } from "@/lib/i18n"
 import { INK_COLORS, SEMANTIC_COLORS } from "@/lib/design-tokens"
 import { MODEL_OPTIONS } from "@/constants/models"
 import type { ModelOptionValue } from "@/constants/models"
@@ -51,14 +52,15 @@ type SeriesPoint = {
 type TopicItem = {
   topic: string
   score: number // 0~1
+  sentiment?: number // -1 ~ +1
 }
 
 type SourceItem = {
-  name: string
   type: string // Source category type, e.g., "Official Website", "News", "UGC", "Social Media", "Knowledge Base", "Academic"
   pos: number
   neu: number
   neg: number
+  name?: string
 }
 
 // Data Adapter
@@ -161,9 +163,9 @@ const METRIC_TOOLTIPS = {
     zh: "展示 AI 回答中對你品牌評價最消極的主題。",
     en: "Highlights the topics where AI shows the most negative sentiment toward your brand.",
   },
-  sentimentBySource: {
-    zh: "展示不同來源中 AI 對你品牌的情緒差異分佈。",
-    en: "Shows how sentiment toward your brand varies across different source types.",
+  sentimentDistribution: {
+    zh: "展示不同來源類別中的情緒表現，對比各渠道的正面與負面傾向。",
+    en: "Shows how sentiment shifts across each source category, comparing positive vs. negative share.",
   },
 }
 
@@ -191,18 +193,19 @@ export default function SentimentPage() {
   
   const [dateRange, setDateRange] = useState(getDefaultDateRange())
   const [isExporting, setIsExporting] = useState(false)
-  
+ 
   const minDate = useMemo(() => getUserRegisteredAt(30), [])
   const maxDate = useMemo(() => getTodayShanghai(), [])
-  
+ 
+  const periodDays = useMemo(() => differenceInDays(dateRange.end, dateRange.start) + 1, [dateRange])
+
   // Calculate effective range based on dateRange
   const effectiveRange = useMemo<RangeKey>(() => {
-    const days = differenceInDays(dateRange.end, dateRange.start) + 1
-    if (days <= 1) return "1d"
-    if (days <= 7) return "7d"
-    if (days <= 14) return "14d"
+    if (periodDays <= 1) return "1d"
+    if (periodDays <= 7) return "7d"
+    if (periodDays <= 14) return "14d"
     return "30d"
-  }, [dateRange])
+  }, [periodDays])
 
   // Fetch sentiment data from API (with error handling to fallback to mock)
   const { data: sentimentApiData, isLoading } = useQuery<SentimentData | null>({
@@ -272,33 +275,53 @@ export default function SentimentPage() {
           .filter((point) => point.date) // Ensure we have valid dates
       
         if (series.length > 0) {
-          // Extract topics from API riskTopics
-          const apiPositiveTopics = (sentimentApiData.riskTopics || [])
-            .filter(t => t && t.sentiment > 0)
-            .map(t => ({
-              topic: t.prompt || "",
-              score: Math.min(1, Math.max(0, (t.sentiment + 1) / 2)), // Convert -1 to 1 range to 0 to 1 range, clamped
+          const apiPositiveTopics = (sentimentApiData.positiveTopics || [])
+            .map((topic) => ({
+              topic: topic.topic,
+              score: Math.max(0, Math.min(1, topic.score ?? Math.max(0, topic.sentiment))),
+              sentiment: topic.sentiment,
             }))
-            .sort((a, b) => b.score - a.score)
-            .slice(0, 5) // Top 5
-            
-          const apiNegativeTopics = (sentimentApiData.riskTopics || [])
-            .filter(t => t && t.sentiment < 0)
-            .map(t => ({
-              topic: t.prompt || "",
-              score: Math.min(1, Math.max(0, Math.abs(t.sentiment))), // Use absolute value, clamped to 0-1
-            }))
-            .sort((a, b) => b.score - a.score)
-            .slice(0, 5) // Top 5
           
-          // Use API topics if available and not empty, otherwise fallback to mock topics
+          const apiNegativeTopics = (sentimentApiData.negativeTopics || [])
+            .map((topic) => ({
+              topic: topic.topic,
+              score: Math.max(0, Math.min(1, topic.score ?? Math.abs(topic.sentiment))),
+              sentiment: topic.sentiment,
+            }))
+
+          const fallbackPositive = (sentimentApiData.riskTopics || [])
+            .filter((t) => t && t.sentiment > 0)
+            .map((t) => ({
+              topic: t.prompt || "",
+              score: Math.min(1, Math.max(0, (t.sentiment + 1) / 2)),
+              sentiment: t.sentiment,
+            }))
+
+          const fallbackNegative = (sentimentApiData.riskTopics || [])
+            .filter((t) => t && t.sentiment < 0)
+            .map((t) => ({
+              topic: t.prompt || "",
+              score: Math.min(1, Math.max(0, Math.abs(t.sentiment))),
+              sentiment: t.sentiment,
+            }))
+
+          const sourcesFromApi = Array.isArray(sentimentApiData.sourcesDistribution)
+            ? sentimentApiData.sourcesDistribution.map((item) => ({
+                type: item.type,
+                name: item.type,
+                pos: item.pos,
+                neu: item.neu,
+                neg: item.neg,
+              }))
+            : []
+          
           return {
             series,
             topics: { 
-              positive: apiPositiveTopics.length > 0 ? apiPositiveTopics : (fallbackData.topics?.positive || []),
-              negative: apiNegativeTopics.length > 0 ? apiNegativeTopics : (fallbackData.topics?.negative || []),
+              positive: apiPositiveTopics.length > 0 ? apiPositiveTopics : (fallbackPositive.length > 0 ? fallbackPositive : (fallbackData.topics?.positive || [])),
+              negative: apiNegativeTopics.length > 0 ? apiNegativeTopics : (fallbackNegative.length > 0 ? fallbackNegative : (fallbackData.topics?.negative || [])),
             },
-            sources: fallbackData.sources || [],
+            sources: sourcesFromApi.length > 0 ? sourcesFromApi : (fallbackData.sources || []),
           }
         }
       } catch (error) {
@@ -319,6 +342,47 @@ export default function SentimentPage() {
     setSelectedModel(model)
   }
 
+  const computeSeriesKpis = (series: SeriesPoint[]) => {
+    if (!series || series.length === 0) {
+      return {
+        avgSentiment: 0,
+        positive: 0,
+        neutral: 0,
+        negative: 0,
+      }
+    }
+    const len = series.length
+    const avgSentiment = series.reduce((sum, p) => sum + p.sentimentScore, 0) / len
+    const avgPos = series.reduce((sum, p) => sum + p.pos, 0) / len
+    const avgNeu = series.reduce((sum, p) => sum + p.neu, 0) / len
+    const avgNeg = series.reduce((sum, p) => sum + p.neg, 0) / len
+    return {
+      avgSentiment,
+      positive: Math.round(avgPos * 100),
+      neutral: Math.round(avgNeu * 100),
+      negative: Math.round(avgNeg * 100),
+    }
+  }
+
+  const windowedSeries = useMemo(() => {
+    const series = sentimentData?.series || []
+    if (series.length === 0) {
+      return {
+        current: [] as SeriesPoint[],
+        previous: [] as SeriesPoint[],
+      }
+    }
+    const windowSize = Math.min(periodDays, series.length)
+    const current = series.slice(-windowSize)
+    let previous = series.slice(-windowSize * 2, -windowSize)
+    if (previous.length === 0 && series.length > windowSize) {
+      previous = series.slice(0, windowSize)
+    }
+    return { current, previous }
+  }, [periodDays, sentimentData?.series])
+  const currentSeriesWindow = windowedSeries.current
+  const previousSeriesWindow = windowedSeries.previous
+
   // Calculate KPIs from API data or series data
   const kpis = useMemo(() => {
     // If we have API data, use it directly
@@ -330,56 +394,57 @@ export default function SentimentPage() {
         negative: sentimentApiData.kpis.negative,
       }
     }
-    
-    // Otherwise, calculate from series data (fallback to mock data)
-    if (!sentimentData?.series || sentimentData.series.length === 0) {
-      return {
-        avgSentiment: 0,
-        positive: 0,
-        neutral: 0,
-        negative: 0,
-      }
+
+    // Otherwise, calculate from current window (fallback to mock data)
+    return computeSeriesKpis(currentSeriesWindow.length ? currentSeriesWindow : sentimentData?.series || [])
+  }, [currentSeriesWindow, sentimentApiData, sentimentData?.series])
+
+  const previousKpis = useMemo(() => {
+    if (previousSeriesWindow.length > 0) {
+      return computeSeriesKpis(previousSeriesWindow)
     }
-
-    const series = sentimentData.series
-    const avgSentiment =
-      series.reduce((sum, p) => sum + p.sentimentScore, 0) / series.length
-    const avgPos =
-      series.reduce((sum, p) => sum + p.pos, 0) / series.length
-    const avgNeu =
-      series.reduce((sum, p) => sum + p.neu, 0) / series.length
-    const avgNeg =
-      series.reduce((sum, p) => sum + p.neg, 0) / series.length
-
     return {
-      avgSentiment: avgSentiment,
-      positive: Math.round(avgPos * 100),
-      neutral: Math.round(avgNeu * 100),
-      negative: Math.round(avgNeg * 100),
+      avgSentiment: Math.max(-1, Math.min(1, kpis.avgSentiment - 0.05)),
+      positive: Math.max(0, kpis.positive - 3),
+      neutral: Math.max(0, kpis.neutral - 3),
+      negative: Math.max(0, kpis.negative - 2),
     }
-  }, [sentimentApiData, sentimentData])
+  }, [kpis.avgSentiment, kpis.negative, kpis.neutral, kpis.positive, previousSeriesWindow])
 
-  // Calculate trends (compare last value with previous)
-  const trends = useMemo(() => {
-    if (!sentimentData?.series || sentimentData.series.length < 2) {
-      return {
-        avgSentiment: 0,
-        positive: 0,
-        neutral: 0,
-        negative: 0,
-      }
-    }
-    const series = sentimentData.series
-    const last = series[series.length - 1]
-    const prev = series[series.length - 2]
-    
+  const kpiChanges = useMemo(() => {
     return {
-      avgSentiment: last.sentimentScore - prev.sentimentScore,
-      positive: last.pos - prev.pos,
-      neutral: last.neu - prev.neu,
-      negative: last.neg - prev.neg,
+      avgSentiment: kpis.avgSentiment - previousKpis.avgSentiment,
+      positive: kpis.positive - previousKpis.positive,
+      neutral: kpis.neutral - previousKpis.neutral,
+      negative: kpis.negative - previousKpis.negative,
     }
-  }, [sentimentData])
+  }, [kpis, previousKpis])
+
+  const positiveTopicList = useMemo(() => {
+    const list = sentimentData?.topics?.positive || []
+    return [...list]
+      .sort((a, b) => (b.sentiment ?? b.score) - (a.sentiment ?? a.score))
+      .slice(0, 5)
+  }, [sentimentData?.topics?.positive])
+
+  const negativeTopicList = useMemo(() => {
+    const list = sentimentData?.topics?.negative || []
+    return [...list]
+      .sort((a, b) => {
+        const aVal = a.sentiment ?? -a.score
+        const bVal = b.sentiment ?? -b.score
+        return aVal - bVal
+      })
+      .slice(0, 5)
+  }, [sentimentData?.topics?.negative])
+
+  const comparisonLabel = useMemo(() => {
+    if (language === "zh-TW") {
+      return `較前${periodDays}天`
+    }
+    if (periodDays === 1) return "vs previous day"
+    return `vs previous ${periodDays} days`
+  }, [language, periodDays])
 
   // Export functions
   const handleExportCSV = () => {
@@ -454,7 +519,7 @@ export default function SentimentPage() {
       }
       
       content += `</table>
-        <h2>Sentiment by Source</h2>
+        <h2>Sentiment Distribution</h2>
         <table><tr><th>Source</th><th>Positive</th><th>Neutral</th><th>Negative</th></tr>`
       
       if (sentimentData.sources) {
@@ -502,134 +567,92 @@ export default function SentimentPage() {
         />
 
         {/* Main Content */}
-        <div className="container mx-auto px-4 sm:px-pageX py-4 sm:py-pageY max-w-[1600px]">
+        <div className="container mx-auto px-4 sm:px-pageX py-3 sm:py-4 max-w-[1600px]">
           {/* KPI Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            {/* Avg Sentiment */}
-            <div className="rounded-lg border border-ink-200 bg-white p-5 shadow-subtle hover:shadow-md transition-shadow">
-              <div className="flex items-center gap-1 text-xs text-ink-500 mb-1">
-                <span>Avg Sentiment</span>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button type="button" className="text-ink-400 hover:text-ink-600 transition-colors">
-                      <HelpCircle className="h-3 w-3" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs">
-                    <p className="text-xs text-ink-900">{METRIC_TOOLTIPS.avgSentiment.zh}</p>
-                    <p className="text-xs text-ink-500 mt-1">{METRIC_TOOLTIPS.avgSentiment.en}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-              <div className="flex items-end justify-between mt-2">
-                <span className="text-2xl font-semibold text-ink-900">
-                  {kpis.avgSentiment.toFixed(2)}
-                </span>
-                {trends.avgSentiment !== 0 && (
-                  <div
-                    className={`flex items-center gap-1 text-xs font-medium ${
-                      trends.avgSentiment > 0 ? "text-[#16A34A]" : "text-[#DC2626]"
-                    }`}
-                  >
-                    {trends.avgSentiment > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-                    <span>{Math.abs(trends.avgSentiment).toFixed(2)}</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 items-stretch">
+            {[
+              {
+                key: "avgSentiment" as const,
+                label: translate("Avg Sentiment", language),
+                tooltip: METRIC_TOOLTIPS.avgSentiment,
+                value: kpis.avgSentiment,
+                isPercentage: false,
+                decimals: 2,
+              },
+              {
+                key: "positive" as const,
+                label: translate("Positive", language),
+                tooltip: METRIC_TOOLTIPS.positive,
+                value: kpis.positive,
+                isPercentage: true,
+                decimals: 0,
+              },
+              {
+                key: "neutral" as const,
+                label: translate("Neutral", language),
+                tooltip: METRIC_TOOLTIPS.neutral,
+                value: kpis.neutral,
+                isPercentage: true,
+                decimals: 0,
+              },
+              {
+                key: "negative" as const,
+                label: translate("Negative", language),
+                tooltip: METRIC_TOOLTIPS.negative,
+                value: kpis.negative,
+                isPercentage: true,
+                decimals: 0,
+              },
+            ].map((card) => {
+              const delta = kpiChanges[card.key]
+              const isUp = delta > 0
+              const isDown = delta < 0
+              const showDelta = isUp || isDown
+              const valueDisplay = card.isPercentage
+                ? `${card.value.toFixed(card.decimals)}%`
+                : card.value.toFixed(card.decimals)
+              const deltaDisplay = card.isPercentage
+                ? `${Math.abs(delta).toFixed(1)}%`
+                : Math.abs(delta).toFixed(2)
+              return (
+                <div
+                  key={card.key}
+                  className="rounded-lg border border-ink-200 bg-white p-5 shadow-subtle hover:shadow-md transition-shadow h-full"
+                >
+                  <div className="flex items-start justify-between text-xs text-ink-500">
+                    <span>{card.label}</span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="text-ink-400 hover:text-ink-600 transition-colors">
+                          <HelpCircle className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p className="text-xs text-ink-900">{card.tooltip.zh}</p>
+                        <p className="text-xs text-ink-500 mt-1">{card.tooltip.en}</p>
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
-                )}
-              </div>
-            </div>
-
-            {/* Positive */}
-            <div className="rounded-lg border border-ink-200 bg-white p-5 shadow-subtle hover:shadow-md transition-shadow">
-              <div className="flex items-center gap-1 text-xs text-ink-500 mb-1">
-                <span>Positive</span>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button type="button" className="text-ink-400 hover:text-ink-600 transition-colors">
-                      <HelpCircle className="h-3 w-3" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs">
-                    <p className="text-xs text-ink-900">{METRIC_TOOLTIPS.positive.zh}</p>
-                    <p className="text-xs text-ink-500 mt-1">{METRIC_TOOLTIPS.positive.en}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-              <div className="flex items-end justify-between mt-2">
-                <span className="text-2xl font-semibold text-ink-900">{kpis.positive}%</span>
-                {trends.positive !== 0 && (
-                  <div
-                    className={`flex items-center gap-1 text-xs font-medium ${
-                      trends.positive > 0 ? "text-[#16A34A]" : "text-[#DC2626]"
-                    }`}
-                  >
-                    {trends.positive > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-                    <span>{(Math.abs(trends.positive) * 100).toFixed(1)}%</span>
+                  <div className="mt-3 flex items-end justify-between">
+                    <span className="text-[26px] leading-none font-semibold text-ink-900">{valueDisplay}</span>
+                    <div className="text-right">
+                      {showDelta ? (
+                        <div
+                          className={`flex items-center justify-end gap-1 text-xs font-semibold ${
+                            isUp ? "text-emerald-500" : "text-rose-500"
+                          }`}
+                        >
+                          {isUp ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                          <span>{deltaDisplay}</span>
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-ink-400">--</span>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
-            </div>
-
-            {/* Neutral */}
-            <div className="rounded-lg border border-ink-200 bg-white p-5 shadow-subtle hover:shadow-md transition-shadow">
-              <div className="flex items-center gap-1 text-xs text-ink-500 mb-1">
-                <span>Neutral</span>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button type="button" className="text-ink-400 hover:text-ink-600 transition-colors">
-                      <HelpCircle className="h-3 w-3" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs">
-                    <p className="text-xs text-ink-900">{METRIC_TOOLTIPS.neutral.zh}</p>
-                    <p className="text-xs text-ink-500 mt-1">{METRIC_TOOLTIPS.neutral.en}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-              <div className="flex items-end justify-between mt-2">
-                <span className="text-2xl font-semibold text-ink-900">{kpis.neutral}%</span>
-                {trends.neutral !== 0 && (
-                  <div
-                    className={`flex items-center gap-1 text-xs font-medium ${
-                      trends.neutral > 0 ? "text-[#16A34A]" : "text-[#DC2626]"
-                    }`}
-                  >
-                    {trends.neutral > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-                    <span>{(Math.abs(trends.neutral) * 100).toFixed(1)}%</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Negative */}
-            <div className="rounded-lg border border-ink-200 bg-white p-5 shadow-subtle hover:shadow-md transition-shadow">
-              <div className="flex items-center gap-1 text-xs text-ink-500 mb-1">
-                <span>Negative</span>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button type="button" className="text-ink-400 hover:text-ink-600 transition-colors">
-                      <HelpCircle className="h-3 w-3" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs">
-                    <p className="text-xs text-ink-900">{METRIC_TOOLTIPS.negative.zh}</p>
-                    <p className="text-xs text-ink-500 mt-1">{METRIC_TOOLTIPS.negative.en}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-              <div className="flex items-end justify-between mt-2">
-                <span className="text-2xl font-semibold text-ink-900">{kpis.negative}%</span>
-                {trends.negative !== 0 && (
-                  <div
-                    className={`flex items-center gap-1 text-xs font-medium ${
-                      trends.negative > 0 ? "text-[#DC2626]" : "text-[#16A34A]"
-                    }`}
-                  >
-                    {trends.negative > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-                    <span>{(Math.abs(trends.negative) * 100).toFixed(1)}%</span>
-                  </div>
-                )}
-              </div>
-            </div>
+                </div>
+              )
+            })}
           </div>
 
           {/* Main Content Grid */}
@@ -637,7 +660,7 @@ export default function SentimentPage() {
             {/* Left: Sentiment by Source */}
             <div className="xl:col-span-8 rounded-lg border border-ink-200 bg-white p-5 shadow-subtle hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold text-ink-900">Sentiment by Source</h2>
+                <h2 className="text-sm font-semibold text-ink-900">{translate("Sentiment Distribution", language)}</h2>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button type="button" className="text-ink-400 hover:text-ink-600 transition-colors">
@@ -645,8 +668,8 @@ export default function SentimentPage() {
                     </button>
                   </TooltipTrigger>
                   <TooltipContent className="max-w-xs">
-                    <p className="text-xs text-ink-900">{METRIC_TOOLTIPS.sentimentBySource.zh}</p>
-                    <p className="text-xs text-ink-500 mt-1">{METRIC_TOOLTIPS.sentimentBySource.en}</p>
+                    <p className="text-xs text-ink-900">{METRIC_TOOLTIPS.sentimentDistribution.zh}</p>
+                    <p className="text-xs text-ink-500 mt-1">{METRIC_TOOLTIPS.sentimentDistribution.en}</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -685,9 +708,9 @@ export default function SentimentPage() {
                       }}
                       labelStyle={{ color: INK_COLORS[900], marginBottom: "4px", fontSize: "11px" }}
                     />
-                    <Bar dataKey="pos" name="Positive" fill={SEMANTIC_COLORS.info} radius={[6, 6, 0, 0]} />
-                    <Bar dataKey="neu" name="Neutral" fill={INK_COLORS[400]} radius={[6, 6, 0, 0]} />
-                    <Bar dataKey="neg" name="Negative" fill={SEMANTIC_COLORS.bad} radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="pos" name={translate("Positive", language)} fill={SEMANTIC_COLORS.info} radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="neu" name={translate("Neutral", language)} fill={INK_COLORS[400]} radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="neg" name={translate("Negative", language)} fill={SEMANTIC_COLORS.bad} radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -698,7 +721,7 @@ export default function SentimentPage() {
               {/* Top Positive Topics */}
               <div className="rounded-lg border border-ink-200 bg-white p-5 shadow-subtle hover:shadow-md transition-shadow">
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-semibold text-ink-900">Top Positive Topics</h2>
+                  <h2 className="text-sm font-semibold text-ink-900">{translate("Top Positive Topics", language)}</h2>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button type="button" className="text-ink-400 hover:text-ink-600 transition-colors">
@@ -712,10 +735,10 @@ export default function SentimentPage() {
                   </Tooltip>
                 </div>
                 <div className="space-y-2">
-                  {sentimentData?.topics?.positive && sentimentData.topics.positive.length > 0 ? (
-                    sentimentData.topics.positive.slice(0, 5).map((item, idx) => (
-                      <div key={idx} className="flex items-center justify-between text-xs">
-                        <span className="text-ink-700 truncate flex-1 mr-2">{item.topic}</span>
+                  {positiveTopicList.length > 0 ? (
+                    positiveTopicList.map((item, idx) => (
+                      <div key={`${item.topic}-${idx}`} className="flex items-center justify-between text-xs">
+                        <span className="text-ink-700 truncate flex-1 mr-2">{translate(item.topic, language)}</span>
                         <span className="text-ink-900 font-medium">{Math.round(item.score * 100)}%</span>
                       </div>
                     ))
@@ -728,7 +751,7 @@ export default function SentimentPage() {
               {/* Top Negative Topics */}
               <div className="rounded-lg border border-ink-200 bg-white p-5 shadow-subtle hover:shadow-md transition-shadow">
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-semibold text-ink-900">Top Negative Topics</h2>
+                  <h2 className="text-sm font-semibold text-ink-900">{translate("Top Negative Topics", language)}</h2>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button type="button" className="text-ink-400 hover:text-ink-600 transition-colors">
@@ -742,10 +765,10 @@ export default function SentimentPage() {
                   </Tooltip>
                 </div>
                 <div className="space-y-2">
-                  {sentimentData?.topics?.negative && sentimentData.topics.negative.length > 0 ? (
-                    sentimentData.topics.negative.slice(0, 5).map((item, idx) => (
-                      <div key={idx} className="flex items-center justify-between text-xs">
-                        <span className="text-ink-700 truncate flex-1 mr-2">{item.topic}</span>
+                  {negativeTopicList.length > 0 ? (
+                    negativeTopicList.map((item, idx) => (
+                      <div key={`${item.topic}-${idx}`} className="flex items-center justify-between text-xs">
+                        <span className="text-ink-700 truncate flex-1 mr-2">{translate(item.topic, language)}</span>
                         <span className="text-ink-900 font-medium">{Math.round(item.score * 100)}%</span>
                       </div>
                     ))

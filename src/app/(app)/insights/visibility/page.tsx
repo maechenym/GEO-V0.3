@@ -44,12 +44,7 @@ import { CHART_PRIMARY_COLOR, INK_COLORS } from "@/lib/design-tokens"
 
 const RANKING_SECTION_ID = "visibility-ranking-section"
 
-const RANKING_METRIC_OPTIONS: Array<{ value: RankingMetric; label: string }> = [
-  { value: "visibility", label: "Visibility" },
-  { value: "reach", label: "Reach" },
-  { value: "rank", label: "Rank" },
-  { value: "focus", label: "Focus" },
-]
+// RANKING_METRIC_OPTIONS will be created dynamically with translations
 
 interface VisibilityHeatmap {
   sources: HeatmapSource[]
@@ -134,12 +129,12 @@ export default function VisibilityPage() {
   const [focusPage, setFocusPage] = useState(1)
 
   const minDate = useMemo(() => getUserRegisteredAt(30), [])
-  // Use data file's last date (2025-11-06) as maxDate instead of "today"
+  // Use data file's last date (2025-11-14) as maxDate instead of "today"
   // This ensures date range selections don't exceed available data
   const maxDate = useMemo(() => {
-    // Data file contains dates from 2025-10-31 to 2025-11-06
-    // Use 2025-11-06 as the maximum date
-    return parseDateShanghai("2025-11-06")
+    // Data file contains dates from 2025-11-08 to 2025-11-14
+    // Use 2025-11-14 as the maximum date
+    return parseDateShanghai("2025-11-14")
   }, [])
 
   useEffect(() => {
@@ -151,23 +146,23 @@ export default function VisibilityPage() {
         const parsedStart = parseDateShanghai(startParam)
         const parsedEnd = parseDateShanghai(endParam)
         // Ensure dates are within data file bounds
-        const dataMinDate = parseDateShanghai("2025-10-31")
-        const dataMaxDate = parseDateShanghai("2025-11-06")
+        const dataMinDate = parseDateShanghai("2025-11-08")
+        const dataMaxDate = parseDateShanghai("2025-11-14")
         const validatedStart = parsedStart < dataMinDate ? dataMinDate : parsedStart > dataMaxDate ? dataMaxDate : parsedStart
         const validatedEnd = parsedEnd > dataMaxDate ? dataMaxDate : parsedEnd < dataMinDate ? dataMinDate : parsedEnd
         setDateRange({ start: validatedStart, end: validatedEnd })
       } catch {
-        // Default: last 7 days within data file (2025-10-31 to 2025-11-06)
+        // Default: last 7 days within data file (2025-11-08 to 2025-11-14)
         setDateRange({
-          start: parseDateShanghai("2025-10-31"),
-          end: parseDateShanghai("2025-11-06"),
+          start: parseDateShanghai("2025-11-08"),
+          end: parseDateShanghai("2025-11-14"),
         })
       }
     } else {
-      // Default: last 7 days within data file (2025-10-31 to 2025-11-06)
+      // Default: last 7 days within data file (2025-11-08 to 2025-11-14)
       setDateRange({
-        start: parseDateShanghai("2025-10-31"),
-        end: parseDateShanghai("2025-11-06"),
+        start: parseDateShanghai("2025-11-08"),
+        end: parseDateShanghai("2025-11-14"),
       })
     }
   }, [searchParams])
@@ -204,6 +199,7 @@ export default function VisibilityPage() {
       selectedProductId,
       selectedBrandId,
       selectedModel,
+      language,
     ],
     queryFn: async () => {
       try {
@@ -218,6 +214,7 @@ export default function VisibilityPage() {
             productId: selectedProductId || undefined,
             brandId: selectedBrandId || undefined,
             model: selectedModel,
+            language: language,
           },
         })
         
@@ -304,30 +301,24 @@ export default function VisibilityPage() {
   }, [apiData])
 
   const summaryCards = useMemo(() => {
-    const labelMap: Record<VisibilitySummaryMetric, { zh: string; en: string }> = {
-      reach: { zh: "Reach", en: "Reach" },
-      rank: { zh: "Rank", en: "Rank" },
-      focus: { zh: "Focus", en: "Focus" },
-    }
-
     return [
       {
         key: "reach" as const,
-        label: language === "zh-TW" ? labelMap.reach.zh : labelMap.reach.en,
+        label: translate("Reach", language),
         value: metricsData.reach.value,
         unit: metricsData.reach.unit,
         delta: metricsData.reach.growth,
       },
       {
         key: "rank" as const,
-        label: language === "zh-TW" ? labelMap.rank.zh : labelMap.rank.en,
+        label: translate("Rank", language),
         value: metricsData.rank.value,
         unit: metricsData.rank.unit,
         delta: metricsData.rank.growth,
       },
       {
         key: "focus" as const,
-        label: language === "zh-TW" ? labelMap.focus.zh : labelMap.focus.en,
+        label: translate("Focus", language),
         value: metricsData.focus.value,
         unit: metricsData.focus.unit,
         delta: metricsData.focus.growth,
@@ -474,9 +465,19 @@ export default function VisibilityPage() {
 
 
   const selectedRankingLabel = useMemo(() => {
-    const option = RANKING_METRIC_OPTIONS.find((item) => item.value === tab)
-    return option ? option.label : "Visibility"
-  }, [tab])
+    switch (tab) {
+      case "visibility":
+        return translate("Visibility", language)
+      case "reach":
+        return translate("Reach", language)
+      case "rank":
+        return translate("Rank", language)
+      case "focus":
+        return translate("Focus", language)
+      default:
+        return translate("Visibility", language)
+    }
+  }, [tab, language])
 
   const handleExport = () => {
     toast({ title: language === "zh-TW" ? "導出功能" : "Export", description: language === "zh-TW" ? "導出功能開發中" : "Export is under development." })
@@ -485,13 +486,13 @@ export default function VisibilityPage() {
   const getMetricLabel = (metric: RankingMetric) => {
     switch (metric) {
       case "visibility":
-        return "Visibility"
+        return translate("Visibility", language)
       case "reach":
-        return "Reach"
+        return translate("Reach", language)
       case "rank":
-        return "Rank"
+        return translate("Rank", language)
       case "focus":
-        return "Focus"
+        return translate("Focus", language)
     }
   }
 
@@ -747,11 +748,7 @@ export default function VisibilityPage() {
       <div className="bg-background -mx-6">
         <PageHeaderFilterBar
           title={language === "zh-TW" ? "可見度分析" : "Visibility Insights"}
-          description={
-            language === "zh-TW"
-              ? "分析品牌可見度指標：Reach、Rank 和 Focus"
-              : "Analyze brand visibility metrics: Reach, Rank, and Focus"
-          }
+          description={translate("Analyze brand visibility metrics: Reach, Rank, and Focus", language)}
           startDate={displayDateRange.start}
           endDate={displayDateRange.end}
           onDateChange={handleDateRangeChange}
@@ -797,9 +794,9 @@ export default function VisibilityPage() {
                           <div className="flex items-end justify-between mt-2">
                             <span className="text-2xl font-semibold text-ink-900">
                               {displayValue}
-                              {card.unit && (
-                                <span className="text-xs font-medium ml-1 text-ink-500">{card.unit}</span>
-                              )}
+                              <span className="text-xs font-medium ml-1 text-ink-500">
+                                {card.unit || (card.key !== "rank" ? "%" : "")}
+                              </span>
                             </span>
                             {hasDelta && delta !== 0 ? (
                               <div className="flex items-center gap-1 text-xs font-medium text-ink-600">
@@ -822,7 +819,7 @@ export default function VisibilityPage() {
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <h2 className="text-sm font-semibold text-ink-900">
-                        {language === "zh-TW" ? "Visibility 趨勢" : "Visibility Trend"}
+                        {translate("Visibility Trend", language)}
                       </h2>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -835,20 +832,13 @@ export default function VisibilityPage() {
                         </TooltipContent>
                       </Tooltip>
                     </div>
-                    <span className="text-2xs text-ink-500">
-                      {language === "zh-TW"
-                        ? "指標：Visibility（combined_score%）"
-                        : "Metric: Visibility (combined_score%)"}
-                    </span>
                   </div>
                   <div className="mb-3 flex items-baseline gap-4">
                     <span className="text-2xl font-semibold text-ink-900">
                       {metricsData.visibility.value?.toFixed(1)}
-                      {metricsData.visibility.unit && (
-                        <span className="text-xs font-medium ml-1 text-ink-500">
-                          {metricsData.visibility.unit}
-                        </span>
-                      )}
+                      <span className="text-xs font-medium ml-1 text-ink-500">
+                        {metricsData.visibility.unit || "%"}
+                      </span>
                     </span>
                     <div className="flex items-center gap-1.5 text-sm font-medium text-ink-600">
                       {metricsData.visibility.growth > 0 ? (
@@ -865,7 +855,10 @@ export default function VisibilityPage() {
                         <span className="text-xs text-ink-400">—</span>
                       )}
                       <span className="text-xs text-ink-500 ml-1">
-                        {isOneDay ? "vs previous day" : `vs previous ${periodDays} days`}
+                        {isOneDay 
+                          ? translate("vs previous day", language)
+                          : `${translate("vs previous", language)}${periodDays}${translate("days", language)}`
+                        }
                       </span>
                     </div>
                   </div>
@@ -873,10 +866,10 @@ export default function VisibilityPage() {
                     <div className="h-[300px] w-full bg-ink-50 rounded-md flex items-center justify-center border border-dashed border-ink-200">
                       <div className="text-center">
                         <div className="text-sm text-ink-500 mb-1">
-                          {language === "zh-TW" ? "無可用的 Visibility 趨勢資料" : "No visibility trend data"}
+                          {translate("No visibility trend data", language)}
                         </div>
                         <div className="text-xs text-ink-400">
-                          {language === "zh-TW" ? "請調整篩選條件後再試" : "Try adjusting your filters"}
+                          {translate("Try adjusting your filters", language)}
                         </div>
                       </div>
                     </div>
@@ -899,7 +892,7 @@ export default function VisibilityPage() {
                             tick={{ fill: INK_COLORS[500] }}
                             axisLine={false}
                             tickLine={false}
-                            tickFormatter={(value) => `${value.toFixed(1)}`}
+                            tickFormatter={(value) => `${value.toFixed(1)}%`}
                           />
                           <RechartsTooltip
                             contentStyle={{
@@ -942,7 +935,7 @@ export default function VisibilityPage() {
                   <div className="flex items-center justify-between mb-3">
                     <div>
                       <h2 className="text-sm font-semibold text-ink-900">
-                        {language === "zh-TW" ? "排名" : "Ranking"}
+                        {translate("Visibility Ranking", language)}
                       </h2>
                     </div>
                     <Select value={tab} onValueChange={(value) => handleTabChange(value as RankingMetric)}>
@@ -954,7 +947,12 @@ export default function VisibilityPage() {
                         <SelectValue>{selectedRankingLabel}</SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        {RANKING_METRIC_OPTIONS.map((option) => (
+                        {([
+                          { value: "visibility" as const, label: translate("Visibility", language) },
+                          { value: "reach" as const, label: translate("Reach", language) },
+                          { value: "rank" as const, label: translate("Rank", language) },
+                          { value: "focus" as const, label: translate("Focus", language) },
+                        ] as Array<{ value: RankingMetric; label: string }>).map((option) => (
                           <SelectItem key={option.value} value={option.value}>
                             {option.label}
                           </SelectItem>
@@ -991,7 +989,7 @@ export default function VisibilityPage() {
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <h2 className="text-sm font-semibold text-ink-900">
-                        {language === "zh-TW" ? "Visibility 熱力圖" : "Visibility Heatmap"}
+                        {translate("Visibility Heatmap", language)}
                       </h2>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -1000,7 +998,7 @@ export default function VisibilityPage() {
                           </button>
                         </TooltipTrigger>
                         <TooltipContent className="max-w-xs">
-                          <p className="text-xs text-ink-900">{getTooltipContent("Visibility Heatmap", language)}</p>
+                          <p className="text-xs text-ink-900">{getTooltipContent("Visibility Heatmap_tooltip", language)}</p>
                         </TooltipContent>
                       </Tooltip>
                     </div>
@@ -1016,7 +1014,7 @@ export default function VisibilityPage() {
                         style={{ gridTemplateColumns: `minmax(140px, 1fr) repeat(${heatmapData.topics.length}, 1fr)` }}
                       >
                         <div className="sticky left-0 top-0 z-10 bg-white px-4 py-2 border-b border-r border-ink-100 font-medium text-ink-500">
-                          {language === "zh-TW" ? "來源 / 主題" : "Source / Topic"}
+                          {translate("Source / Topic", language)}
                         </div>
                         {heatmapData.topics.map((topic) => (
                           <div
