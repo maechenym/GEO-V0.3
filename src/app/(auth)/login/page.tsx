@@ -9,29 +9,30 @@ import Link from "next/link"
 import { Mail } from "lucide-react"
 import { useAuthStore } from "@/store/auth.store"
 import apiClient from "@/services/api"
-import { MagicLinkResponseSchema } from "@/types/auth"
+import { LoginResponseSchema, MagicLinkResponseSchema } from "@/types/auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { FormMessage } from "@/components/ui/form-message"
 
-const magicLinkSchema = z.object({
+const loginSchema = z.object({
   email: z.string().min(1, "请输入邮箱地址").email("请输入有效的邮箱地址"),
+  password: z.string().min(1, "请输入密码"),
 })
 
-type MagicLinkForm = z.infer<typeof magicLinkSchema>
+type LoginForm = z.infer<typeof loginSchema>
 
 export default function LoginPage() {
   const router = useRouter()
-  const { token, profile } = useAuthStore()
+  const { token, profile, loginWithToken, loadProfile } = useAuthStore()
 
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
     setError,
-  } = useForm<MagicLinkForm>({
-    resolver: zodResolver(magicLinkSchema),
+  } = useForm<LoginForm>({
+    resolver: zodResolver(loginSchema),
     mode: "onChange",
   })
 
@@ -46,7 +47,53 @@ export default function LoginPage() {
     }
   }, [token, profile, router])
 
-  const onSendMagicLink = async (data: MagicLinkForm) => {
+  // Login 提交
+  const onLogin = async (data: LoginForm) => {
+    try {
+      if (!data.email || !data.password) {
+        setError("root", { message: "请输入邮箱和密码" })
+        return
+      }
+
+      const response = await apiClient.post("/api/auth/login", {
+        email: data.email,
+        password: data.password,
+      })
+      const result = LoginResponseSchema.parse(response.data)
+
+      if (result.ok) {
+        // 保存 token，建立会话
+        await loginWithToken(result.token)
+
+        // 调用 GET /api/auth/session 拉取 profile.hasBrand
+        const profile = await loadProfile()
+
+        // 特殊处理：test1@example.com 或 test1@gmail.com 跳转到分析结果页面
+        if (data.email === "test1@example.com" || data.email === "test1@gmail.com") {
+          router.push("/analysis-results")
+          return
+        }
+
+        // 根据 hasBrand 决定跳转
+        if (!profile.hasBrand) {
+          router.push("/onboarding/brand")
+        } else {
+          router.push("/overview")
+        }
+      } else {
+        setError("root", { message: "登录失败，请重试" })
+      }
+    } catch (error: unknown) {
+      const message =
+        error && typeof error === "object" && "message" in error
+          ? String(error.message)
+          : "登录失败，请重试"
+      setError("root", { message })
+    }
+  }
+
+  // Send Magic Link
+  const onSendMagicLink = async (data: LoginForm) => {
     try {
       const response = await apiClient.post("/api/auth/magic-link", { email: data.email })
       const result = MagicLinkResponseSchema.parse(response.data)
@@ -74,7 +121,10 @@ export default function LoginPage() {
           <p className="text-muted-foreground">登录你的账户</p>
         </div>
 
-        <form onSubmit={handleSubmit(onSendMagicLink)} className="space-y-6">
+        <form
+          onSubmit={handleSubmit(onLogin)}
+          className="space-y-6"
+        >
           <div className="space-y-2">
             <Label htmlFor="email">
               Email <span className="text-destructive">*</span>
@@ -92,16 +142,41 @@ export default function LoginPage() {
             <FormMessage message={errors.email?.message} variant="error" />
           </div>
 
-          <div className="space-y-1 text-sm text-muted-foreground">
-            <p>我们会将一次性的 Magic Link 发送到您的邮箱，请在 10 分钟内完成登录。</p>
+          <div className="space-y-2">
+            <Label htmlFor="password">
+              Password <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="请输入密码"
+              {...register("password")}
+              disabled={isSubmitting}
+              className={errors.password ? "border-destructive" : ""}
+              aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? "password-error" : undefined}
+            />
+            <FormMessage message={errors.password?.message} variant="error" />
           </div>
 
           {errors.root && <FormMessage message={errors.root.message} variant="error" />}
 
-          <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isSubmitting}>
-            <Mail className="mr-2 h-4 w-4" />
-            {isSubmitting ? "发送中..." : "Send Magic Link"}
-          </Button>
+          <div className="space-y-3">
+            <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isSubmitting}>
+              {isSubmitting ? "登录中..." : "Login"}
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={handleSubmit(onSendMagicLink)}
+              disabled={isSubmitting}
+            >
+              <Mail className="mr-2 h-4 w-4" />
+              Send Magic Link
+            </Button>
+          </div>
         </form>
 
         <div className="relative">
