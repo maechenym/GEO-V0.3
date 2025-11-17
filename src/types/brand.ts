@@ -6,6 +6,8 @@ import { z } from "zod"
 export const BrandBasicSchema = z.object({
   brandName: z.string().min(1, "品牌名称为必填"),
   productName: z.string().min(1, "产品名称为必填"),
+  category: z.string().optional().nullable(), // 产品类别（选填）
+  competitors: z.array(z.string()).optional().default([]), // 竞品品牌列表（选填）
 })
 
 export type BrandBasic = z.infer<typeof BrandBasicSchema>

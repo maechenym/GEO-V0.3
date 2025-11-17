@@ -31,10 +31,20 @@ export function PlanCard({ plan, isCurrentPlan = false }: PlanCardProps) {
   const router = useRouter()
   const { setSelectedPlan } = useCheckoutStore()
   const { language } = useLanguageStore()
+  const { token, profile } = useAuthStore()
   const [contactDialogOpen, setContactDialogOpen] = useState(false)
   const [isRedirecting, setIsRedirecting] = useState(false)
 
   const handleCardClick = () => {
+    // Check if user is logged in
+    if (!token || !profile) {
+      // Save plan to store for later use after login
+      setSelectedPlan(plan)
+      // Redirect to login page
+      router.push("/login")
+      return
+    }
+
     if (plan.planId === "enterprise") {
       setContactDialogOpen(true)
     } else {
@@ -50,6 +60,15 @@ export function PlanCard({ plan, isCurrentPlan = false }: PlanCardProps) {
   }
 
   const handleSelectPlan = async () => {
+    // Check if user is logged in
+    if (!token || !profile) {
+      // Save plan to store for later use after login
+      setSelectedPlan(plan)
+      // Redirect to login page
+      router.push("/login")
+      return
+    }
+
     // Save plan to store
     setSelectedPlan(plan)
 

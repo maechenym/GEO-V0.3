@@ -33,7 +33,7 @@ import {
 import { subDays, differenceInDays } from "date-fns"
 import { useBrandUIStore } from "@/store/brand-ui.store"
 import { useLanguageStore } from "@/store/language.store"
-import { getTooltipContent, translate } from "@/lib/i18n"
+import { getTooltipContent, translate, getSourceTypePurpose } from "@/lib/i18n"
 import { exportToCSV, exportToPDF } from "@/lib/export-utils"
 import type { SourceFilters } from "@/types/sources"
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, Cell, LabelList } from "recharts"
@@ -301,7 +301,7 @@ export default function SourcesPage() {
           maxDate={maxDate}
           selectedModel={selectedModel}
           onModelChange={handleModelChange}
-          showModelSelector={true}
+          showModelSelector={false}
           onExportCSV={handleExportCSV}
           onExportPDF={handleExportPDF}
           isExporting={isExporting}
@@ -487,12 +487,20 @@ export default function SourcesPage() {
                                   </div>
                                 </td>
                                 <td className="py-3 px-4 text-sm text-ink-900">
-                                  <Badge
-                                    variant="outline"
-                                    className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-400"
-                                  >
-                                    {source.type}
-                                  </Badge>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Badge
+                                        variant="outline"
+                                        className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-400 cursor-help"
+                                      >
+                                        {translate(source.type, language)}
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p className="text-xs font-medium">{translate(source.type, language)}</p>
+                                      <p className="text-xs text-ink-500 mt-1">{getSourceTypePurpose(source.type, language)}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
                                 </td>
                                 <td className="py-3 px-4 text-center">
                                   <span className="text-sm font-medium">
@@ -628,9 +636,17 @@ export default function SourcesPage() {
                         return (
                           <div key={source.id} className="space-y-3">
                             <div className="flex items-start justify-between gap-4">
-                              <div className="text-sm font-semibold text-ink-900">
-                                {translate(source.type, language)}
-                              </div>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="text-sm font-semibold text-ink-900 cursor-help">
+                                    {translate(source.type, language)}
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="text-xs font-medium">{translate(source.type, language)}</p>
+                                  <p className="text-xs text-ink-500 mt-1">{getSourceTypePurpose(source.type, language)}</p>
+                                </TooltipContent>
+                              </Tooltip>
                               <div className="text-xs font-medium text-ink-600 text-right">
                                 <span className="text-ink-900">{primaryValue.toFixed(0)}%</span>
                                 <span className="mx-1 text-ink-400">vs</span>

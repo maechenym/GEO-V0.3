@@ -236,6 +236,62 @@ const englishToTraditional: Record<string, string> = {
   "Sources Distribution": "不同來源類別的佔比情況，協助識別主要引用來源",
   "Sources Distribution_en": "How each source category contributes to total mentions, highlighting dominant origins.",
   
+  // Source Type 分類和用途說明
+  "Official": "Official",
+  "Official_zh": "官方",
+  "Official_purpose": "產品信息最權威",
+  "Official_purpose_en": "Most authoritative product information",
+  "Official Website": "Official",
+  "Official Website_zh": "官方",
+  "News": "News",
+  "News_zh": "新聞",
+  "News_purpose": "事實數據最核心來源",
+  "News_purpose_en": "Core source of factual data",
+  "News / Editorial": "News",
+  "News / Editorial_zh": "新聞",
+  "Editorial": "News",
+  "Editorial_zh": "新聞",
+  "Media": "Media",
+  "Media_zh": "媒體",
+  "Media_purpose": "科技/產品分析",
+  "Media_purpose_en": "Technology/product analysis",
+  "Tech / Vertical Media": "Media",
+  "Tech / Vertical Media_zh": "媒體",
+  "Tech Blog": "Media",
+  "Tech Blog_zh": "媒體",
+  "Knowledge": "Knowledge",
+  "Knowledge_zh": "知識",
+  "Knowledge_purpose": "背景知識",
+  "Knowledge_purpose_en": "Background knowledge",
+  "Wiki / Knowledge Base": "Knowledge",
+  "Wiki / Knowledge Base_zh": "知識",
+  "Wiki": "Knowledge",
+  "Wiki_zh": "知識",
+  "Knowledge Base": "Knowledge",
+  "Knowledge Base_zh": "知識",
+  "Business Profiles": "Business Profiles",
+  "Business Profiles_zh": "商業檔案",
+  "Business Profiles_purpose": "公司信息",
+  "Business Profiles_purpose_en": "Company information",
+  "Review": "Review",
+  "Review_zh": "評測",
+  "Review_purpose": "評測/口碑",
+  "Review_purpose_en": "Reviews/reputation",
+  "Product Review": "Review",
+  "Product Review_zh": "評測",
+  "Review Site": "Review",
+  "Review Site_zh": "評測",
+  "UGC": "UGC",
+  "UGC_zh": "用戶生成內容",
+  "UGC_purpose": "用戶經驗",
+  "UGC_purpose_en": "User experience",
+  "Social Media": "UGC",
+  "Social Media_zh": "用戶生成內容",
+  "Academic": "Academic",
+  "Academic_zh": "學術",
+  "Academic_purpose": "專業知識",
+  "Academic_purpose_en": "Professional knowledge",
+  
   // Tooltips - Intent頁面
   "Core Queries": "代表該品類的核心問題",
   "Core Queries_en": "Representative key questions for this category",
@@ -247,6 +303,8 @@ const englishToTraditional: Record<string, string> = {
   "Query Distribution_en": "Proportion of each query type across all questions",
   "Topics": "該品類下相關的主要話題",
   "Topics_en": "Main topics related to this category",
+  "Query Topics": "查詢問題的主要主題分類",
+  "Query Topics_en": "Main topic categories for query questions",
   "Total Queries（Topic）": "該主題下的問題總數",
   "Total Queries（Topic）_en": "Total number of questions under this topic",
   "Reach": "該主題下你的品牌被提到的頻率平均值",
@@ -283,6 +341,8 @@ const englishToTraditional: Record<string, string> = {
   "Reach_en": "Indicates how often the brand is mentioned in AI responses — higher reach means greater exposure",
   "Rank": "顯示品牌在 AI 回答中出現的時間順序 — 更早的提及表明更高的相關性或優先級",
   "Rank_en": "Shows how early the brand appears in AI answers — earlier mentions suggest higher relevance or priority",
+  "Position": "顯示品牌在 AI 回答中出現的時間順序 — 更早的提及表明更高的相關性或優先級",
+  "Position_en": "Shows how early the brand appears in AI answers — earlier mentions suggest higher relevance or priority",
   "Focus": "衡量 AI 內容中關注品牌的比重 — 代表其注意力份額",
   "Focus_en": "Measures how much of the AI's content focuses on the brand — representing its share of attention",
   "Sentiment": "情緒",
@@ -332,13 +392,15 @@ const englishToTraditional: Record<string, string> = {
   "Reach": "觸及率",
   "Reach_en": "Reach",
   "Rank": "提及順序",
-  "Rank_en": "Rank",
+  "Rank_en": "Position",
+  "Position": "提及順序",
+  "Position_en": "Position",
   "Focus": "內容佔比",
   "Focus_en": "Focus",
   
   // Tooltips - Visibility頁面
   "Trend": "顯示所選指標（可見度 / 觸及率 / 提及順序 / 內容佔比）隨時間的近期變化。使用下拉選單切換",
-  "Trend_en": "Shows recent change over time for the selected metric (Visibility / Reach / Rank / Focus). Use the dropdown to switch",
+  "Trend_en": "Shows recent change over time for the selected metric (Visibility / Reach / Position / Focus). Use the dropdown to switch",
   "Visibility Heatmap": "可見度熱力圖",
   "Visibility Heatmap_en": "Visibility Heatmap",
   "Visibility Heatmap_tooltip": "來源與主題的交叉熱力圖，用於快速識別模型在何處最常提到你的品牌",
@@ -363,6 +425,16 @@ const englishToTraditional: Record<string, string> = {
   "Top Positive Topics_en": "Top Positive Topics",
   "Top Negative Topics": "熱門負面主題",
   "Top Negative Topics_en": "Top Negative Topics",
+  "Top Positive Response Themes": "熱門正面回應主題",
+  "Top Positive Response Themes_en": "Top Positive Response Themes",
+  "Top Negative Response Themes": "熱門負面回應主題",
+  "Top Negative Response Themes_en": "Top Negative Response Themes",
+  "Response Themes": "回應主題",
+  "Response Themes_en": "Response Themes",
+  "Query Topics": "查詢主題",
+  "Query Topics_en": "Query Topics",
+  "Topics": "主題",
+  "Topics_en": "Topics",
   "Sentiment Distribution": "情緒分佈",
   "Sentiment Distribution_en": "Sentiment Distribution",
   "Innovation leadership": "創新領導力",
@@ -420,13 +492,99 @@ const englishToTraditional: Record<string, string> = {
   "Efficient supply chain management": "高效的供應鏈管理",
   "Efficient supply chain operations": "高效的供應鏈運營",
   "Analyze brand visibility metrics: Reach, Rank, and Focus": "分析品牌可見度指標：觸及率、提及順序和內容佔比",
-  "Analyze brand visibility metrics: Reach, Rank, and Focus_en": "Analyze brand visibility metrics: Reach, Rank, and Focus",
+  "Analyze brand visibility metrics: Reach, Rank, and Focus_en": "Analyze brand visibility metrics: Reach, Position, and Focus",
   "vs previous day": "與前一天相比",
   "vs previous day_en": "vs previous day",
   "vs previous": "與前",
   "vs previous_en": "vs previous",
   "days": "天相比",
   "days_en": "days",
+}
+
+// 中文到英文的映射（用于品牌名和 topics）
+const chineseToEnglish: Record<string, string> = {
+  // 品牌名
+  "英业达": "Inventec",
+  "英業達": "Inventec",
+  "惠普": "HP",
+  "华为": "Huawei",
+  "華為": "Huawei",
+  "戴尔": "Dell",
+  "戴爾": "Dell",
+  "联想": "Lenovo",
+  "聯想": "Lenovo",
+  "超微": "Supermicro",
+  "威盛電子": "VIA Technologies",
+  "合勤科技": "Zyxel",
+  "技嘉科技": "Gigabyte",
+  "新华三": "H3C",
+  "新華三": "H3C",
+  "浪潮": "Inspur",
+  "研华": "Advantech",
+  "研華": "Advantech",
+  "华擎": "ASRock",
+  "華擎": "ASRock",
+  "华硕": "ASUS",
+  "華碩": "ASUS",
+  "广达电脑": "Quanta Computer",
+  "廣達電腦": "Quanta Computer",
+  "广达": "Quanta",
+  "廣達": "Quanta",
+  "仁宝电脑": "Compal Electronics",
+  "仁寶電腦": "Compal Electronics",
+  "仁宝": "Compal",
+  "仁寶": "Compal",
+  "华勤技术": "Huaqin Technology",
+  "華勤技術": "Huaqin Technology",
+  "华勤": "Huaqin",
+  "華勤": "Huaqin",
+  "和硕联合": "Pegatron",
+  "和碩聯合": "Pegatron",
+  "和硕": "Pegatron",
+  "和碩": "Pegatron",
+  "纬创资通": "Wistron",
+  "緯創資通": "Wistron",
+  "纬创": "Wistron",
+  "緯創": "Wistron",
+  "闻泰科技": "Wingtech",
+  "聞泰科技": "Wingtech",
+  "闻泰": "Wingtech",
+  "聞泰": "Wingtech",
+  
+  // Topics
+  "技术创新": "Technology Innovation",
+  "技術創新": "Technology Innovation",
+  "产品质量": "Product Quality",
+  "產品質量": "Product Quality",
+  "供应链管理": "Supply Chain Management",
+  "供應鏈管理": "Supply Chain Management",
+  "成本控制": "Cost Control",
+  "全球最大的笔记本电脑ODM厂商": "World's Largest Laptop ODM Manufacturer",
+  "全球最大的筆記型電腦ODM廠商": "World's Largest Laptop ODM Manufacturer",
+  "高效的供應鏈管理": "Efficient Supply Chain Management",
+  "高效的供應鏈運營": "Efficient Supply Chain Operations",
+  "性能与架构": "Performance and Architecture",
+  "性能與架構": "Performance and Architecture",
+  "冷却、能效和高密度部署": "Cooling, Power Efficiency and High-Density Deployment",
+  "冷卻、能效和高密度部署": "Cooling, Power Efficiency and High-Density Deployment",
+  "数据中心级稳定性和高可用性": "Data Center-Grade Stability and High Availability",
+  "數據中心級穩定性和高可用性": "Data Center-Grade Stability and High Availability",
+  "AI、深度学习和高性能计算应用": "AI, Deep Learning and High-Performance Computing Applications",
+  "AI、深度學習和高性能計算應用": "AI, Deep Learning and High-Performance Computing Applications",
+  "边缘计算和私有云/混合云部署": "Edge Computing and Private Cloud / Hybrid Cloud Deployment",
+  "邊緣計算和私有雲/混合雲部署": "Edge Computing and Private Cloud / Hybrid Cloud Deployment",
+  "2024年出货量同比减少5%": "5% year-over-year decrease in shipments in 2024",
+  "2024年出貨量同比減少5%": "5% year-over-year decrease in shipments in 2024",
+  "2024年，出货量为3230万台，同比减少5%": "In 2024, shipments were 32.3 million units, a 5% year-over-year decrease",
+  "2024年，出貨量為3230萬台，同比減少5%": "In 2024, shipments were 32.3 million units, a 5% year-over-year decrease",
+  "劳工条件和成本控制的争议": "Controversies over labor conditions and cost control",
+  "勞工條件和成本控制的爭議": "Controversies over labor conditions and cost control",
+  "劳工条件": "Labor Conditions",
+  "勞工條件": "Labor Conditions",
+  "出货量": "Shipments",
+  "出貨量": "Shipments",
+  "同比减少": "Year-over-year decrease",
+  "同比減少": "Year-over-year decrease",
 }
 
 /**
@@ -455,6 +613,11 @@ export function translate(text: string, language: Language): string {
     }
     // 再檢查簡體中文到繁體中文的映射
     return toTraditional(text)
+  } else {
+    // 英文模式：檢查中文到英文的映射（品牌名、topics等）
+    if (chineseToEnglish[text]) {
+      return chineseToEnglish[text]
+    }
   }
   return text
 }
@@ -478,6 +641,23 @@ export function getTooltipContent(key: string, language: Language): string {
  */
 export function translateArray(texts: string[], language: Language): string[] {
   return texts.map(text => translate(text, language))
+}
+
+/**
+ * 獲取 Source Type 的用途說明
+ */
+export function getSourceTypePurpose(sourceType: string, language: Language): string {
+  // 先將舊的 source type 名稱映射到新的標準名稱
+  const normalizedType = englishToTraditional[sourceType] || sourceType
+  
+  const purposeKey = `${normalizedType}_purpose`
+  const purposeEnKey = `${normalizedType}_purpose_en`
+  
+  if (language === "zh-TW") {
+    return englishToTraditional[purposeKey] || normalizedType
+  } else {
+    return englishToTraditional[purposeEnKey] || englishToTraditional[purposeKey] || normalizedType
+  }
 }
 
 /**

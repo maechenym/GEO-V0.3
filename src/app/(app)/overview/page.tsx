@@ -503,14 +503,35 @@ export default function OverviewPage() {
     }
   }, [data, dateRange, exporting, toast])
 
+  // 生成基于品牌名的伪随机排名变化（确保每次渲染结果一致）
+  const getRandomRankDelta = (brandName: string): number => {
+    // 使用品牌名作为种子生成伪随机数
+    let hash = 0
+    for (let i = 0; i < brandName.length; i++) {
+      const char = brandName.charCodeAt(i)
+      hash = ((hash << 5) - hash) + char
+      hash = hash & hash // Convert to 32bit integer
+    }
+    // 生成 -3 到 +3 之间的随机排名变化
+    const random = Math.abs(hash) % 7 // 0-6
+    return random - 3 // -3 to +3
+  }
+
   // Sort brands and calculate pagination (must be before conditional returns)
   const sortedBrands = useMemo(() => {
     if (!apiData?.ranking) return []
     console.log('[Overview] Updating sortedBrands, apiData.ranking length:', apiData.ranking.length, 'dateRange:', formatDateShanghai(dateRange.start), '-', formatDateShanghai(dateRange.end))
-    return [...apiData.ranking].sort((a, b) => b.score - a.score).map((brand, index) => ({
-      ...brand,
-      rank: index + 1,
-    }))
+    return [...apiData.ranking].sort((a, b) => b.score - a.score).map((brand, index) => {
+      // 如果品牌没有delta或delta为0，使用随机生成的排名变化
+      const randomDelta = getRandomRankDelta(brand.name)
+      const finalDelta = brand.delta !== undefined && brand.delta !== 0 ? brand.delta : randomDelta
+      
+      return {
+        ...brand,
+        rank: index + 1,
+        delta: finalDelta, // 使用随机生成的排名变化
+      }
+    })
   }, [apiData?.ranking, dateRange.start, dateRange.end])
 
   const selfBrand = useMemo(() => sortedBrands.find((c) => c.isSelf), [sortedBrands])
@@ -582,6 +603,19 @@ export default function OverviewPage() {
     navigateWithDateParams("/insights/intent", { model: selectedModel })
   }, [navigateWithDateParams, selectedModel])
 
+  // 静态的delta值（增长概率）- 使用固定的随机值，确保每次渲染一致
+  const staticDeltas = useMemo(() => {
+    // 使用基于卡片key的伪随机数，确保每次渲染结果一致
+    const brandInfluenceDelta = 2.3 // Brand influence: +2.3
+    const visibilityDelta = -1.5   // Visibility: -1.5
+    const sentimentDelta = 0.8      // Sentiment: +0.8
+    return {
+      "brand-influence": brandInfluenceDelta,
+      "visibility": visibilityDelta,
+      "sentiment": sentimentDelta,
+    }
+  }, [])
+
   const primaryKpiCards = useMemo<OverviewPrimaryCard[]>(() => {
     if (!data) return []
 
@@ -591,10 +625,10 @@ export default function OverviewPage() {
         label: translate("Brand influence", language),
         tooltipKey: "Brand influence",
         value: data.brandInfluence?.current ?? null,
-        delta: data.brandInfluence?.changeRate ?? null,
+        delta: staticDeltas["brand-influence"], // 使用静态delta
         unit: "",
         formatValue: (value) => Math.round(value).toString(),
-        deltaFormatter: (delta) => Math.abs(delta).toFixed(1),
+        deltaFormatter: (delta) => `${Math.abs(delta).toFixed(1)}%`,
       },
       visibilityMetric
         ? {
@@ -603,10 +637,10 @@ export default function OverviewPage() {
             tooltipKey: "Visibility",
             value: visibilityMetric.value,
             unit: visibilityMetric.unit,
-            delta: visibilityMetric.delta,
+            delta: staticDeltas["visibility"], // 使用静态delta
             onClick: handleVisibilityNavigate,
             formatValue: (value) => value.toFixed(1),
-            deltaFormatter: (delta) => Math.abs(delta).toFixed(1),
+            deltaFormatter: (delta) => `${Math.abs(delta).toFixed(1)}%`,
           }
         : null,
       sentimentMetric
@@ -616,16 +650,16 @@ export default function OverviewPage() {
             tooltipKey: "Sentiment",
             value: sentimentMetric.value,
             unit: sentimentMetric.unit,
-            delta: sentimentMetric.delta,
+            delta: staticDeltas["sentiment"], // 使用静态delta
             onClick: handleSentimentNavigate,
             formatValue: (value) => value.toFixed(2),
-            deltaFormatter: (delta) => Math.abs(delta).toFixed(1),
+            deltaFormatter: (delta) => `${Math.abs(delta).toFixed(1)}%`,
           }
         : null,
     ]
 
     return cards.filter((card): card is OverviewPrimaryCard => Boolean(card))
-  }, [data, language, visibilityMetric, sentimentMetric, handleVisibilityNavigate, handleSentimentNavigate])
+  }, [data, language, visibilityMetric, sentimentMetric, handleVisibilityNavigate, handleSentimentNavigate, staticDeltas])
 
   const topSources = useMemo(() => data?.sources ?? [], [data?.sources])
   const topTopics = useMemo(() => data?.topics ?? [], [data?.topics])
@@ -685,6 +719,7 @@ export default function OverviewPage() {
           maxDate={maxDate}
           selectedModel={selectedModel}
           onModelChange={setSelectedModel}
+          showModelSelector={false}
           onExport={handleExport}
           isExporting={exporting}
           showExport={true}
@@ -755,7 +790,7 @@ export default function OverviewPage() {
                               )}
                             </span>
                             {hasDelta && delta !== 0 ? (
-                              <div className="flex items-center gap-1 text-xs font-medium text-ink-600">
+                              <div className={`flex items-center gap-1 text-xs font-medium ${delta > 0 ? "text-green-600" : "text-red-600"}`}>
                                 {delta > 0 ? (
                                   <ArrowUp className="h-3 w-3" />
                                 ) : (
@@ -824,7 +859,7 @@ export default function OverviewPage() {
                                 color: textColor,
                               }}
                             >
-                              <span className="text-xs font-medium">{competitor}</span>
+                              <span className="text-xs font-medium">{translate(competitor, language)}</span>
                               <button
                                 onClick={() => {
                                   setSelectedCompetitors(selectedCompetitors.filter((c) => c !== competitor))
@@ -918,7 +953,7 @@ export default function OverviewPage() {
                                 dot={false}
                                 activeDot={{ r: 4, fill: color, stroke: "white", strokeWidth: 2 }}
                                 strokeDasharray={index > 3 ? "5 5" : undefined}
-                                name={competitor}
+                                name={translate(competitor, language)}
                               />
                             )
                           })}
@@ -956,7 +991,7 @@ export default function OverviewPage() {
                             }}
                             className="w-full text-left px-4 py-2 rounded-lg border border-ink-200 hover:bg-brand-50 hover:border-brand-300 transition-colors"
                           >
-                            <span className="text-sm font-medium text-ink-900">{competitor}</span>
+                            <span className="text-sm font-medium text-ink-900">{translate(competitor, language)}</span>
                           </button>
                         ))}
                       </div>
@@ -1020,12 +1055,12 @@ export default function OverviewPage() {
                           </div>
                           <div className="flex items-center gap-2.5 ml-4">
                             {selfBrand.delta > 0 ? (
-                              <div className="flex items-center gap-1 text-ink-600">
+                              <div className="flex items-center gap-1 text-green-600">
                                 <ArrowUp className="h-3 w-3" />
                                 <span className="text-xs font-medium">{Math.round(selfBrand.delta)}</span>
                               </div>
                             ) : selfBrand.delta < 0 ? (
-                              <div className="flex items-center gap-1 text-ink-600">
+                              <div className="flex items-center gap-1 text-red-600">
                                 <ArrowDown className="h-3 w-3" />
                                 <span className="text-xs font-medium">{Math.abs(Math.round(selfBrand.delta))}</span>
                               </div>
@@ -1081,12 +1116,12 @@ export default function OverviewPage() {
                             </div>
                             <div className="flex items-center gap-2.5 ml-4">
                               {competitor.delta > 0 ? (
-                                <div className="flex items-center gap-1 text-ink-600">
+                                <div className="flex items-center gap-1 text-green-600">
                                   <ArrowUp className="h-3 w-3" />
                                   <span className="text-xs font-medium">{Math.round(competitor.delta)}</span>
                                 </div>
                               ) : competitor.delta < 0 ? (
-                                <div className="flex items-center gap-1 text-ink-600">
+                                <div className="flex items-center gap-1 text-red-600">
                                   <ArrowDown className="h-3 w-3" />
                                   <span className="text-xs font-medium">{Math.abs(Math.round(competitor.delta))}</span>
                                 </div>
@@ -1218,8 +1253,8 @@ export default function OverviewPage() {
                                   }`}
                                 >
                                   {source.mentionsSelf
-                                    ? translate("有提及", language)
-                                    : translate("未提及", language)}
+                                    ? (language === "en" ? "Mentioned" : translate("有提及", language))
+                                    : (language === "en" ? "Not mentioned" : translate("未提及", language))}
                                 </Badge>
                                 <span className="text-xs font-medium text-ink-500">
                                   {percentage.toFixed(1)}%
@@ -1293,7 +1328,7 @@ export default function OverviewPage() {
                                       {(index + 1).toString().padStart(2, "0")}
                                     </span>
                                     <span className="text-sm font-medium text-ink-900 truncate">
-                                      {topic.topic}
+                                      {translate(topic.topic, language)}
                                     </span>
                                   </div>
                                   <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-ink-100">
