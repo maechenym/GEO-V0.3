@@ -15,6 +15,7 @@ export const simulateLoad = <T>(data: T, delay: number = 500): Promise<T> => {
 export const mockIntentKpis: IntentKpis = {
   topicCount: 128,
   promptCount: 2345,
+  totalQueries: 37520, // Backend must provide this - no frontend calculation
   compositeRank: 2,
   avgVisibility: 78.5,
   avgMentionRate: 65.2,

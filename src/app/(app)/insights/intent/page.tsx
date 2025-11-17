@@ -225,23 +225,10 @@ export default function IntentPage() {
     return r
   }, [sortedRows, filters])
 
-  // Derive KPIs for current scope
-  const scopedKpis = useMemo(() => {
-    if (!kpis) return null
-    const topicCount = 15 // Fixed to 15 core queries
-    const promptCount = filteredRows.reduce((sum, t) => sum + t.prompts.length, 0)
-    // Total queries should be at least 15 times more than core queries (topicCount)
-    // So totalQueries >= topicCount * 16 (at least 16 times, which is 15 times more)
-    const totalQueries = Math.max(topicCount * 16, promptCount + 1000)
-    const topicAvgRanks = filteredRows.map((t) => {
-      const ranks = t.prompts.map((p) => p.rank || 6)
-      return ranks.length ? ranks.reduce((a, b) => a + b, 0) / ranks.length : 6
-    })
-    const compositeRank = topicAvgRanks.length
-      ? Math.max(1, Math.round(topicAvgRanks.reduce((a, b) => a + b, 0) / topicAvgRanks.length))
-      : kpis.compositeRank
-    return { ...kpis, topicCount, promptCount, totalQueries, compositeRank }
-  }, [kpis, filteredRows])
+  // Use KPIs directly from backend API - no frontend calculation
+  // TODO: Backend should provide all KPI values including topicCount, promptCount, totalQueries, compositeRank
+  // Removed all frontend calculations - backend must provide these values
+  const scopedKpis = kpis
 
   // Intent Distribution - 直接使用后端提供的数据，不进行计算
   const intentDistribution = useMemo(() => {

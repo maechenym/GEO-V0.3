@@ -442,50 +442,10 @@ export default function SentimentPage() {
     setSelectedModel(model)
   }
 
-  const computeSeriesKpis = (series: SeriesPoint[]) => {
-    if (!series || series.length === 0) {
-      return {
-        avgSentiment: 0,
-        positive: 0,
-        neutral: 0,
-        negative: 0,
-      }
-    }
-    const len = series.length
-    const avgSentiment = series.reduce((sum, p) => sum + p.sentimentScore, 0) / len
-    const avgPos = series.reduce((sum, p) => sum + p.pos, 0) / len
-    const avgNeu = series.reduce((sum, p) => sum + p.neu, 0) / len
-    const avgNeg = series.reduce((sum, p) => sum + p.neg, 0) / len
-    return {
-      avgSentiment,
-      positive: Math.round(avgPos * 100),
-      neutral: Math.round(avgNeu * 100),
-      negative: Math.round(avgNeg * 100),
-    }
-  }
-
-  const windowedSeries = useMemo(() => {
-    const series = sentimentData?.series || []
-    if (series.length === 0) {
-      return {
-        current: [] as SeriesPoint[],
-        previous: [] as SeriesPoint[],
-      }
-    }
-    const windowSize = Math.min(periodDays, series.length)
-    const current = series.slice(-windowSize)
-    let previous = series.slice(-windowSize * 2, -windowSize)
-    if (previous.length === 0 && series.length > windowSize) {
-      previous = series.slice(0, windowSize)
-    }
-    return { current, previous }
-  }, [periodDays, sentimentData?.series])
-  const currentSeriesWindow = windowedSeries.current
-  const previousSeriesWindow = windowedSeries.previous
-
-  // Calculate KPIs from API data or series data
+  // TODO: Backend should provide all KPI values including previous period comparison
+  // Removed frontend calculation - using KPIs directly from API response
   const kpis = useMemo(() => {
-    // If we have API data, use it directly
+    // Use API data directly - no frontend calculation
     if (sentimentApiData?.kpis) {
       return {
         avgSentiment: sentimentApiData.kpis.sentimentIndex,
@@ -494,31 +454,56 @@ export default function SentimentPage() {
         negative: sentimentApiData.kpis.negative,
       }
     }
+    // Fallback to mock data if API not available
+    return {
+      avgSentiment: 0,
+      positive: 0,
+      neutral: 0,
+      negative: 0,
+    }
+  }, [sentimentApiData?.kpis])
 
-    // Otherwise, calculate from current window (fallback to mock data)
-    return computeSeriesKpis(currentSeriesWindow.length ? currentSeriesWindow : sentimentData?.series || [])
-  }, [currentSeriesWindow, sentimentApiData, sentimentData?.series])
-
+  // TODO: Backend should provide previous period KPIs for comparison
+  // Removed frontend calculation - previous KPIs should come from API
   const previousKpis = useMemo(() => {
-    if (previousSeriesWindow.length > 0) {
-      return computeSeriesKpis(previousSeriesWindow)
+    // Use previous period KPIs from API if available
+    if (sentimentApiData?.previousKpis) {
+      return {
+        avgSentiment: sentimentApiData.previousKpis.sentimentIndex,
+        positive: sentimentApiData.previousKpis.positive,
+        neutral: sentimentApiData.previousKpis.neutral,
+        negative: sentimentApiData.previousKpis.negative,
+      }
     }
+    // Fallback: return zero values if not provided by backend
     return {
-      avgSentiment: Math.max(-1, Math.min(1, kpis.avgSentiment - 0.05)),
-      positive: Math.max(0, kpis.positive - 3),
-      neutral: Math.max(0, kpis.neutral - 3),
-      negative: Math.max(0, kpis.negative - 2),
+      avgSentiment: 0,
+      positive: 0,
+      neutral: 0,
+      negative: 0,
     }
-  }, [kpis.avgSentiment, kpis.negative, kpis.neutral, kpis.positive, previousSeriesWindow])
+  }, [sentimentApiData?.previousKpis])
 
+  // TODO: Backend should provide kpiChanges (delta values) directly
+  // Removed frontend calculation - delta values should come from API
   const kpiChanges = useMemo(() => {
-    return {
-      avgSentiment: kpis.avgSentiment - previousKpis.avgSentiment,
-      positive: kpis.positive - previousKpis.positive,
-      neutral: kpis.neutral - previousKpis.neutral,
-      negative: kpis.negative - previousKpis.negative,
+    // Use delta values from API if available
+    if (sentimentApiData?.kpiChanges) {
+      return {
+        avgSentiment: sentimentApiData.kpiChanges.avgSentiment ?? 0,
+        positive: sentimentApiData.kpiChanges.positive ?? 0,
+        neutral: sentimentApiData.kpiChanges.neutral ?? 0,
+        negative: sentimentApiData.kpiChanges.negative ?? 0,
+      }
     }
-  }, [kpis, previousKpis])
+    // Fallback: return zero values if not provided by backend
+    return {
+      avgSentiment: 0,
+      positive: 0,
+      neutral: 0,
+      negative: 0,
+    }
+  }, [sentimentApiData?.kpiChanges])
 
   const positiveTopicList = useMemo(() => {
     const list = sentimentData?.topics?.positive || []

@@ -503,33 +503,22 @@ export default function OverviewPage() {
     }
   }, [data, dateRange, exporting, toast])
 
-  // 生成基于品牌名的伪随机排名变化（确保每次渲染结果一致）
-  const getRandomRankDelta = (brandName: string): number => {
-    // 使用品牌名作为种子生成伪随机数
-    let hash = 0
-    for (let i = 0; i < brandName.length; i++) {
-      const char = brandName.charCodeAt(i)
-      hash = ((hash << 5) - hash) + char
-      hash = hash & hash // Convert to 32bit integer
-    }
-    // 生成 -3 到 +3 之间的随机排名变化
-    const random = Math.abs(hash) % 7 // 0-6
-    return random - 3 // -3 to +3
-  }
+  // TODO: Backend should provide delta values for ranking changes
+  // Removed frontend calculation - using delta directly from API response
 
   // Sort brands and calculate pagination (must be before conditional returns)
   const sortedBrands = useMemo(() => {
     if (!apiData?.ranking) return []
     console.log('[Overview] Updating sortedBrands, apiData.ranking length:', apiData.ranking.length, 'dateRange:', formatDateShanghai(dateRange.start), '-', formatDateShanghai(dateRange.end))
     return [...apiData.ranking].sort((a, b) => b.score - a.score).map((brand, index) => {
-      // 如果品牌没有delta或delta为0，使用随机生成的排名变化
-      const randomDelta = getRandomRankDelta(brand.name)
-      const finalDelta = brand.delta !== undefined && brand.delta !== 0 ? brand.delta : randomDelta
+      // Use delta directly from backend API - no frontend calculation
+      // TODO: Backend must provide delta values for all brands
+      const finalDelta = brand.delta ?? 0
       
       return {
         ...brand,
         rank: index + 1,
-        delta: finalDelta, // 使用随机生成的排名变化
+        delta: finalDelta, // Use delta from backend API
       }
     })
   }, [apiData?.ranking, dateRange.start, dateRange.end])
@@ -603,18 +592,14 @@ export default function OverviewPage() {
     navigateWithDateParams("/insights/intent", { model: selectedModel })
   }, [navigateWithDateParams, selectedModel])
 
-  // 静态的delta值（增长概率）- 使用固定的随机值，确保每次渲染一致
-  const staticDeltas = useMemo(() => {
-    // 使用基于卡片key的伪随机数，确保每次渲染结果一致
-    const brandInfluenceDelta = 2.3 // Brand influence: +2.3
-    const visibilityDelta = -1.5   // Visibility: -1.5
-    const sentimentDelta = 0.8      // Sentiment: +0.8
-    return {
-      "brand-influence": brandInfluenceDelta,
-      "visibility": visibilityDelta,
-      "sentiment": sentimentDelta,
-    }
-  }, [])
+  // TODO: Backend should provide delta values for KPI cards
+  // Removed frontend calculation - delta values should come from API response
+  // Using delta from API data if available, otherwise 0
+  const getKpiDelta = (kpiName: string): number => {
+    if (!data?.kpis) return 0
+    const kpi = data.kpis.find(k => k.name === kpiName)
+    return kpi?.delta ?? 0
+  }
 
   const primaryKpiCards = useMemo<OverviewPrimaryCard[]>(() => {
     if (!data) return []
@@ -625,7 +610,7 @@ export default function OverviewPage() {
         label: translate("Brand influence", language),
         tooltipKey: "Brand influence",
         value: data.brandInfluence?.current ?? null,
-        delta: staticDeltas["brand-influence"], // 使用静态delta
+        delta: getKpiDelta("Brand influence") || 0, // Use delta from backend API
         unit: "",
         formatValue: (value) => Math.round(value).toString(),
         deltaFormatter: (delta) => `${Math.abs(delta).toFixed(1)}%`,
@@ -637,7 +622,7 @@ export default function OverviewPage() {
             tooltipKey: "Visibility",
             value: visibilityMetric.value,
             unit: visibilityMetric.unit,
-            delta: staticDeltas["visibility"], // 使用静态delta
+            delta: getKpiDelta("Visibility") || 0, // Use delta from backend API
             onClick: handleVisibilityNavigate,
             formatValue: (value) => value.toFixed(1),
             deltaFormatter: (delta) => `${Math.abs(delta).toFixed(1)}%`,
@@ -650,7 +635,7 @@ export default function OverviewPage() {
             tooltipKey: "Sentiment",
             value: sentimentMetric.value,
             unit: sentimentMetric.unit,
-            delta: staticDeltas["sentiment"], // 使用静态delta
+            delta: getKpiDelta("Sentiment") || 0, // Use delta from backend API
             onClick: handleSentimentNavigate,
             formatValue: (value) => value.toFixed(2),
             deltaFormatter: (delta) => `${Math.abs(delta).toFixed(1)}%`,
@@ -659,7 +644,7 @@ export default function OverviewPage() {
     ]
 
     return cards.filter((card): card is OverviewPrimaryCard => Boolean(card))
-  }, [data, language, visibilityMetric, sentimentMetric, handleVisibilityNavigate, handleSentimentNavigate, staticDeltas])
+  }, [data, language, visibilityMetric, sentimentMetric, handleVisibilityNavigate, handleSentimentNavigate])
 
   const topSources = useMemo(() => data?.sources ?? [], [data?.sources])
   const topTopics = useMemo(() => data?.topics ?? [], [data?.topics])

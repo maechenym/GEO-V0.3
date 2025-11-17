@@ -239,43 +239,15 @@ export default function VisibilityPage() {
     }
   }, [apiData?.actualDateRange])
 
-  // 生成基于品牌名的伪随机排名变化（确保每次渲染结果一致）
-  const getRandomRankDelta = useCallback((brandName: string): number => {
-    // 使用品牌名作为种子生成伪随机数
-    let hash = 0
-    for (let i = 0; i < brandName.length; i++) {
-      const char = brandName.charCodeAt(i)
-      hash = ((hash << 5) - hash) + char
-      hash = hash & hash // Convert to 32bit integer
-    }
-    // 生成 -3 到 +3 之间的随机排名变化
-    const random = Math.abs(hash) % 7 // 0-6
-    return random - 3 // -3 to +3
-  }, [])
-
-  // 静态的 KPI 卡片 delta 值
-  const staticDeltas = useMemo(() => {
-    return {
-      reach: 1.8,   // Reach: +1.8
-      rank: -0.5,  // Rank: -0.5 (排名下降是好事，所以用负数)
-      focus: 2.1,  // Focus: +2.1
-      visibility: -1.5, // Visibility: -1.5 (下降)
-    }
-  }, [])
-
-  // 为排名数据添加随机 delta（如果 delta 为 0 或 undefined）
+  // TODO: Backend should provide delta values for ranking changes and KPI cards
+  // Removed frontend calculation - using delta directly from API response
   const processRankingData = useCallback((ranking: RankingItem[]): RankingItem[] => {
-    return ranking.map((item) => {
-      // 如果品牌没有delta或delta为0，使用随机生成的排名变化
-      const randomDelta = getRandomRankDelta(item.brand)
-      const finalDelta = item.delta !== undefined && item.delta !== 0 ? item.delta : randomDelta
-      
-      return {
-        ...item,
-        delta: finalDelta,
-      }
-    })
-  }, [getRandomRankDelta])
+    // Use delta directly from backend API - no frontend calculation
+    return ranking.map((item) => ({
+      ...item,
+      delta: item.delta ?? 0, // Use delta from API, default to 0 if not provided
+    }))
+  }, [])
 
   const visibilityRankingData = useMemo(() => {
     const raw = apiData?.visibility.ranking || []
@@ -353,6 +325,21 @@ export default function VisibilityPage() {
     }
   }, [apiData])
 
+  // Get delta values from API response
+  const getDeltaFromApi = (metricKey: "reach" | "rank" | "focus"): number => {
+    if (!apiData?.summary) return 0
+    switch (metricKey) {
+      case "reach":
+        return apiData.summary.reachDelta ?? metricsData.reach.growth ?? 0
+      case "rank":
+        return apiData.summary.rankDelta ?? metricsData.rank.growth ?? 0
+      case "focus":
+        return apiData.summary.focusDelta ?? metricsData.focus.growth ?? 0
+      default:
+        return 0
+    }
+  }
+
   const summaryCards = useMemo(() => {
     return [
       {
@@ -360,24 +347,24 @@ export default function VisibilityPage() {
         label: translate("Reach", language),
         value: metricsData.reach.value,
         unit: metricsData.reach.unit,
-        delta: staticDeltas.reach, // 使用静态delta
+        delta: getDeltaFromApi("reach"), // Use delta from backend API
       },
       {
         key: "rank" as const,
         label: language === "en" ? "Position" : translate("Rank", language),
         value: metricsData.rank.value,
         unit: metricsData.rank.unit,
-        delta: staticDeltas.rank, // 使用静态delta
+        delta: getDeltaFromApi("rank"), // Use delta from backend API
       },
       {
         key: "focus" as const,
         label: translate("Focus", language),
         value: metricsData.focus.value,
         unit: metricsData.focus.unit,
-        delta: staticDeltas.focus, // 使用静态delta
+        delta: getDeltaFromApi("focus"), // Use delta from backend API
       },
     ]
-  }, [language, metricsData, staticDeltas])
+  }, [language, metricsData, apiData?.summary])
 
   const heatmapData = useMemo(() => apiData?.heatmap ?? null, [apiData])
 
@@ -893,16 +880,16 @@ export default function VisibilityPage() {
                         {metricsData.visibility.unit || "%"}
                       </span>
                     </span>
-                    <div className={`flex items-center gap-1.5 text-sm font-medium ${staticDeltas.visibility > 0 ? "text-green-600" : staticDeltas.visibility < 0 ? "text-red-600" : "text-ink-600"}`}>
-                      {staticDeltas.visibility > 0 ? (
+                    <div className={`flex items-center gap-1.5 text-sm font-medium ${(apiData?.summary?.visibilityDelta ?? 0) > 0 ? "text-green-600" : (apiData?.summary?.visibilityDelta ?? 0) < 0 ? "text-red-600" : "text-ink-600"}`}>
+                      {(apiData?.summary?.visibilityDelta ?? 0) > 0 ? (
                         <>
                           <ArrowUp className="h-3.5 w-3.5" />
-                          <span>{Math.abs(staticDeltas.visibility).toFixed(1)}%</span>
+                          <span>{Math.abs(apiData?.summary?.visibilityDelta ?? 0).toFixed(1)}%</span>
                         </>
-                      ) : staticDeltas.visibility < 0 ? (
+                      ) : (apiData?.summary?.visibilityDelta ?? 0) < 0 ? (
                         <>
                           <ArrowDown className="h-3.5 w-3.5" />
-                          <span>{Math.abs(staticDeltas.visibility).toFixed(1)}%</span>
+                          <span>{Math.abs(apiData?.summary?.visibilityDelta ?? 0).toFixed(1)}%</span>
                         </>
                       ) : (
                         <span className="text-xs text-ink-400">—</span>

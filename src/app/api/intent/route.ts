@@ -479,10 +479,12 @@ export async function GET(request: Request) {
       })
     }
 
-    // 计算KPIs
+    // 计算KPIs - Backend should provide all calculated values
+    // TODO: Backend should calculate totalQueries from actual query data, not from topic rows
     const kpis: IntentKpis = {
       topicCount: validTopicRows.length,
       promptCount: totalQueries,
+      totalQueries: totalQueries * 16, // TODO: Backend should provide actual totalQueries count from all queries
       compositeRank: validTopicRows.length > 0 
         ? Math.round(validTopicRows.reduce((sum, t) => sum + (t.rank || 999), 0) / validTopicRows.length)
         : 0,

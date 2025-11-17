@@ -38,6 +38,7 @@ export type TopicRow = z.infer<typeof TopicRowSchema>
 export const IntentKpisSchema = z.object({
   topicCount: z.number(),
   promptCount: z.number(),
+  totalQueries: z.number(), // Backend must provide totalQueries - no frontend calculation
   compositeRank: z.number(),
   avgVisibility: z.number(),
   avgMentionRate: z.number(),
