@@ -67,6 +67,8 @@ export default function BrandOnboardingPage() {
       await apiClient.post("/api/onboarding/waitlist", {
         brandName: basic.brandName,
         productName: basic.productName,
+        category: basic.category || null,
+        competitors: basic.competitors || [],
       })
     } catch (error) {
       // API 调用失败时记录错误，但不阻止用户继续流程

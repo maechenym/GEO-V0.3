@@ -19,9 +19,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { brandName, productName } = body as {
+    const { brandName, productName, category, competitors } = body as {
       brandName?: string
       productName?: string
+      category?: string | null
+      competitors?: string[]
     }
 
     // 验证必填字段

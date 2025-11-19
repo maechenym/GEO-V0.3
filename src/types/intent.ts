@@ -46,6 +46,13 @@ export const IntentKpisSchema = z.object({
 
 export type IntentKpis = z.infer<typeof IntentKpisSchema>
 
+// Intent Distribution Item (如果后端直接提供意图分布数据)
+export interface IntentDistributionItem {
+  intent: "Information" | "Advice" | "Evaluation" | "Comparison" | "Other"
+  count: number
+  percentage: number
+}
+
 export type SortKey = 
   | "topicHot" 
   | "rankAsc" 

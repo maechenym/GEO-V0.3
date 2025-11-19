@@ -113,6 +113,11 @@ export default function IntentPage() {
     kpis: IntentKpis
     topics: TopicRow[]
     actualDateRange?: { start: string; end: string }
+    intentDistribution?: Array<{
+      intent: "Information" | "Advice" | "Evaluation" | "Comparison" | "Other"
+      count: number
+      percentage: number
+    }>
   }>({
     queryKey: [
       "intent",
@@ -146,9 +151,16 @@ export default function IntentPage() {
   })
 
   // Use API data or fallback to mock
-  const kpis = apiData?.kpis || null
-  const rows = apiData?.topics || []
+  const kpis = apiData?.kpis || mockIntentKpis
+  const rows = apiData?.topics && apiData.topics.length > 0 ? apiData.topics : mockTopicRows
   const error = apiError ? new Error(apiError.message) : null
+  
+  // Debug: 打印 API 返回的数据
+  console.log("[Intent Page] API Data:", {
+    hasIntentDistribution: !!apiData?.intentDistribution,
+    intentDistribution: apiData?.intentDistribution,
+    topicsCount: apiData?.topics?.length,
+  })
 
   // Sorting
   const sortedRows = useMemo(() => {
@@ -196,8 +208,17 @@ export default function IntentPage() {
   const filteredRows = useMemo(() => {
     let r = sortedRows
     if (filters.role) r = r.filter((t) => t.prompts.some((p) => p.role === filters.role))
-    if (filters.platforms.length)
-      r = r.filter((t) => t.prompts.some((p) => filters.platforms.includes(p.platform)))
+    // 只有当 platforms 有值且不是默认的全部平台时才过滤
+    // 如果 platforms 包含所有三个平台，则不进行过滤（显示所有平台的数据）
+    const defaultPlatforms = ["ChatGPT", "Gemini", "Claude"]
+    const isAllPlatforms = defaultPlatforms.every(p => filters.platforms.includes(p)) && filters.platforms.length === defaultPlatforms.length
+    if (filters.platforms.length > 0 && !isAllPlatforms) {
+      r = r.filter((t) => t.prompts.some((p) => {
+        // 如果 prompt 的 platform 是 "All Models"，则匹配所有平台
+        if (p.platform === "All Models") return true
+        return filters.platforms.includes(p.platform)
+      }))
+    }
     if (filters.intents.length) r = r.filter((t) => filters.intents.includes(t.intent))
     if (filters.mentionBrand)
       r = r.filter((t) => t.prompts.some((p) => p.mentionsBrand))
@@ -222,20 +243,8 @@ export default function IntentPage() {
     return { ...kpis, topicCount, promptCount, totalQueries, compositeRank }
   }, [kpis, filteredRows])
 
-  // Calculate intent distribution
+  // Intent Distribution - 直接使用后端提供的数据，不进行计算
   const intentDistribution = useMemo(() => {
-    const intentMap: Record<string, number> = {}
-    filteredRows.forEach((topic) => {
-      const intent = topic.intent
-      if (!intentMap[intent]) {
-        intentMap[intent] = 0
-      }
-      intentMap[intent] += topic.promptCount
-    })
-
-    const total = Object.values(intentMap).reduce((sum, count) => sum + count, 0)
-
-    // Map intent names to labels (will be translated based on language)
     const intentLabels: Record<string, string> = {
       Information: translate("Information", language),
       Advice: translate("Advice", language),
@@ -244,7 +253,6 @@ export default function IntentPage() {
       Other: translate("Other", language),
     }
 
-    // Intent colors
     const intentColors: Record<string, string> = {
       Information: "#2563eb", // Blue
       Advice: "#16a34a", // Green
@@ -253,7 +261,7 @@ export default function IntentPage() {
       Other: "#8b5cf6", // Purple
     }
 
-    // Always show all 5 intent types
+    // 确保所有 5 种意图类型都存在
     const defaultIntents = [
       { label: translate("Information", language), key: "Information" },
       { label: translate("Advice", language), key: "Advice" },
@@ -262,23 +270,49 @@ export default function IntentPage() {
       { label: translate("Other", language), key: "Other" },
     ]
 
-    const result = defaultIntents.map(({ label, key }) => {
-      const count = intentMap[key] || 0
-      const percentage = total > 0 ? (count / total) * 100 : 0
-      const color = intentColors[key] || "#6b7280"
+    // 如果后端直接提供了 intentDistribution，直接使用
+    if (apiData?.intentDistribution && Array.isArray(apiData.intentDistribution) && apiData.intentDistribution.length > 0) {
+      console.log("[Intent Distribution] Using backend data:", apiData.intentDistribution)
+      const result = defaultIntents.map(({ label, key }) => {
+        const backendItem = apiData.intentDistribution!.find(item => item.intent === key)
+        const count = backendItem?.count || 0
+        const percentage = backendItem?.percentage || 0 // 直接使用后端提供的百分比
+        const color = intentColors[key] || "#6b7280"
 
+        return {
+          label,
+          count,
+          percentage,
+          color,
+          intentKey: key,
+        }
+      })
+
+      // Sort by count from high to low
+      return result.sort((a, b) => b.count - a.count)
+    }
+
+    // 如果后端没有提供 intentDistribution，使用临时的 mock 数据用于显示
+    console.log("[Intent Distribution] Backend data not available, using mock distribution")
+    const mockIntentDistribution = [
+      { intent: "Information" as const, count: 125, percentage: 25.0 },
+      { intent: "Advice" as const, count: 100, percentage: 20.0 },
+      { intent: "Evaluation" as const, count: 150, percentage: 30.0 },
+      { intent: "Comparison" as const, count: 75, percentage: 15.0 },
+      { intent: "Other" as const, count: 50, percentage: 10.0 },
+    ]
+    
+    return defaultIntents.map(({ label, key }) => {
+      const mockItem = mockIntentDistribution.find(item => item.intent === key)
       return {
         label,
-        count,
-        percentage,
-        color,
+        count: mockItem?.count || 0,
+        percentage: mockItem?.percentage || 0,
+        color: intentColors[key] || "#6b7280",
         intentKey: key,
       }
-    })
-
-    // Sort by count from high to low
-    return result.sort((a, b) => b.count - a.count)
-  }, [filteredRows, language])
+    }).sort((a, b) => b.count - a.count)
+  }, [apiData?.intentDistribution, language])
 
   // Prepare chart data for stacked bar chart
   const chartData = useMemo(() => {
@@ -376,7 +410,7 @@ export default function IntentPage() {
           maxDate={maxDate}
           selectedModel={selectedModel}
           onModelChange={handleModelChange}
-          showModelSelector={true}
+          showModelSelector={false}
           onExport={handleExport}
         />
 
@@ -588,7 +622,7 @@ export default function IntentPage() {
                       <tr className="border-b border-border">
                         <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">
                           <div className="flex items-center gap-2">
-                            <span>Topics</span>
+                            <span>{translate("Query Topics", language)}</span>
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <button className="text-muted-foreground hover:text-foreground transition-colors">
@@ -596,7 +630,7 @@ export default function IntentPage() {
                                 </button>
                               </TooltipTrigger>
                               <TooltipContent>
-                                <p>{getTooltipContent("Topics", language)}</p>
+                                <p>{getTooltipContent("Query Topics", language)}</p>
                               </TooltipContent>
                             </Tooltip>
                           </div>

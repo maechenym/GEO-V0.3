@@ -170,7 +170,7 @@ export function UpgradeCard({ plan, currentPlanId }: UpgradeCardProps) {
             translate("Contact Sales", language)
           ) : (
             <>
-              {language === "zh-TW" ? "升級到" : "Upgrade to"} {translate(plan.name, language)}
+              {translate("Upgrade to", language)} {translate(plan.name, language)}
             </>
           )}
         </Button>

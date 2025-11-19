@@ -28,7 +28,7 @@ import {
 import { differenceInDays } from "date-fns"
 import { exportToCSV, exportToPDF } from "@/lib/export-utils"
 import { useLanguageStore } from "@/store/language.store"
-import { translate } from "@/lib/i18n"
+import { translate, getTooltipContent } from "@/lib/i18n"
 import { INK_COLORS, SEMANTIC_COLORS } from "@/lib/design-tokens"
 import { MODEL_OPTIONS } from "@/constants/models"
 import type { ModelOptionValue } from "@/constants/models"
@@ -124,14 +124,43 @@ const MOCK_TOPICS = {
   ] as TopicItem[],
 }
 
+// 所有标准网站类型（按顺序）
+const ALL_SOURCE_TYPES = [
+  "Official",
+  "News",
+  "Media",
+  "Knowledge",
+  "Business Profiles",
+  "Review",
+  "UGC",
+  "Academic",
+]
+
+// 类型名称映射表（旧名称 -> 标准名称）
+const TYPE_MAPPING: Record<string, string> = {
+  "Official Website": "Official",
+  "News / Editorial": "News",
+  "Editorial": "News",
+  "Tech / Vertical Media": "Media",
+  "Tech Blog": "Media",
+  "Wiki / Knowledge Base": "Knowledge",
+  "Wiki": "Knowledge",
+  "Knowledge Base": "Knowledge",
+  "Product Review": "Review",
+  "Review Site": "Review",
+  "Social Media": "UGC",
+}
+
+// 所有标准网站类型的 fallback 数据
 const MOCK_SOURCES: SourceItem[] = [
-  { name: "Official Website", type: "Official Website", pos: 65, neu: 25, neg: 10 },
-  { name: "TechCrunch", type: "News", pos: 60, neu: 30, neg: 10 },
-  { name: "Forbes", type: "News", pos: 55, neu: 35, neg: 10 },
-  { name: "Blog Example", type: "UGC", pos: 50, neu: 40, neg: 10 },
-  { name: "Social Media", type: "Social Media", pos: 45, neu: 40, neg: 15 },
-  { name: "Knowledge Base", type: "Knowledge Base", pos: 55, neu: 35, neg: 10 },
-  { name: "Academic", type: "Academic", pos: 40, neu: 45, neg: 15 },
+  { name: "Official", type: "Official", pos: 65, neu: 25, neg: 10 },
+  { name: "News", type: "News", pos: 60, neu: 30, neg: 10 },
+  { name: "Media", type: "Media", pos: 55, neu: 35, neg: 10 },
+  { name: "Knowledge", type: "Knowledge", pos: 50, neu: 40, neg: 10 },
+  { name: "Business Profiles", type: "Business Profiles", pos: 45, neu: 40, neg: 15 },
+  { name: "Review", type: "Review", pos: 55, neu: 35, neg: 10 },
+  { name: "UGC", type: "UGC", pos: 40, neu: 45, neg: 15 },
+  { name: "Academic", type: "Academic", pos: 35, neu: 50, neg: 15 },
 ]
 
 const METRIC_TOOLTIPS = {
@@ -305,15 +334,48 @@ export default function SentimentPage() {
               sentiment: t.sentiment,
             }))
 
+          // 从 API 获取数据并映射到标准类型
           const sourcesFromApi = Array.isArray(sentimentApiData.sourcesDistribution)
-            ? sentimentApiData.sourcesDistribution.map((item) => ({
-                type: item.type,
-                name: item.type,
-                pos: item.pos,
-                neu: item.neu,
-                neg: item.neg,
-              }))
+            ? sentimentApiData.sourcesDistribution.map((item) => {
+                // 将旧的类型名称映射到新的标准名称
+                const normalizedType = TYPE_MAPPING[item.type] || item.type
+                // 如果映射后的类型不在标准列表中，尝试通过 translate 函数获取标准名称
+                const finalType = ALL_SOURCE_TYPES.includes(normalizedType) 
+                  ? normalizedType 
+                  : (ALL_SOURCE_TYPES.find(t => translate(t, "en") === normalizedType) || normalizedType)
+                return {
+                  type: finalType,
+                  name: finalType,
+                  pos: item.pos || 0,
+                  neu: item.neu || 0,
+                  neg: item.neg || 0,
+                }
+              })
             : []
+          
+          // 确保所有标准类型都存在，缺失的类型使用 MOCK_SOURCES 中的默认数据
+          const sourcesMap = new Map(sourcesFromApi.map(s => [s.type, s]))
+          const completeSources = ALL_SOURCE_TYPES.map(type => {
+            const existing = sourcesMap.get(type)
+            if (existing) {
+              return existing
+            }
+            // 如果类型不存在，从 MOCK_SOURCES 中查找对应类型的数据
+            const mockData = MOCK_SOURCES.find(s => s.type === type)
+            return mockData ? {
+              type,
+              name: type,
+              pos: mockData.pos || 0,
+              neu: mockData.neu || 0,
+              neg: mockData.neg || 0,
+            } : {
+              type,
+              name: type,
+              pos: 0,
+              neu: 0,
+              neg: 0,
+            }
+          })
           
           return {
             series,
@@ -321,15 +383,53 @@ export default function SentimentPage() {
               positive: apiPositiveTopics.length > 0 ? apiPositiveTopics : (fallbackPositive.length > 0 ? fallbackPositive : (fallbackData.topics?.positive || [])),
               negative: apiNegativeTopics.length > 0 ? apiNegativeTopics : (fallbackNegative.length > 0 ? fallbackNegative : (fallbackData.topics?.negative || [])),
             },
-            sources: sourcesFromApi.length > 0 ? sourcesFromApi : (fallbackData.sources || []),
+            sources: completeSources.length > 0 ? completeSources : (fallbackData.sources || []),
           }
         }
       } catch (error) {
         console.error("[Sentiment] Error processing API data:", error)
       }
     }
+    
     // Always fallback to mock data if API data is not available or invalid
-    return fallbackData
+    // 确保 fallback 数据也包含所有8种标准类型，优先使用 MOCK_SOURCES
+    const fallbackSources = fallbackData.sources && fallbackData.sources.length > 0 
+      ? fallbackData.sources 
+      : MOCK_SOURCES
+    const fallbackMap = new Map(fallbackSources.map((s: SourceItem) => {
+      const normalizedType = TYPE_MAPPING[s.type] || s.type
+      const finalType = ALL_SOURCE_TYPES.includes(normalizedType) 
+        ? normalizedType 
+        : (ALL_SOURCE_TYPES.find(t => translate(t, "en") === normalizedType) || normalizedType)
+      return [finalType, { ...s, type: finalType, name: finalType }]
+    }))
+    const completeFallbackSources = ALL_SOURCE_TYPES.map(type => {
+      const existing = fallbackMap.get(type)
+      // 如果类型不存在，使用 MOCK_SOURCES 中的对应数据，或者设置为默认值
+      if (existing) {
+        return existing
+      }
+      // 从 MOCK_SOURCES 中查找对应类型的数据
+      const mockData = MOCK_SOURCES.find(s => s.type === type)
+      return mockData ? {
+        type,
+        name: type,
+        pos: mockData.pos || 0,
+        neu: mockData.neu || 0,
+        neg: mockData.neg || 0,
+      } : {
+        type,
+        name: type,
+        pos: 0,
+        neu: 0,
+        neg: 0,
+      }
+    })
+    
+    return {
+      ...fallbackData,
+      sources: completeFallbackSources,
+    }
   }, [sentimentApiData, mockSentimentData])
   
   // Handle date range change
@@ -560,7 +660,7 @@ export default function SentimentPage() {
           maxDate={maxDate}
           selectedModel={selectedModel}
           onModelChange={handleModelChange}
-          showModelSelector={true}
+          showModelSelector={false}
           onExportCSV={handleExportCSV}
           onExportPDF={handleExportPDF}
           isExporting={isExporting}
@@ -628,8 +728,7 @@ export default function SentimentPage() {
                         </button>
                       </TooltipTrigger>
                       <TooltipContent className="max-w-xs">
-                        <p className="text-xs text-ink-900">{card.tooltip.zh}</p>
-                        <p className="text-xs text-ink-500 mt-1">{card.tooltip.en}</p>
+                        <p className="text-xs text-ink-900">{getTooltipContent(`${card.label}_tooltip`, language)}</p>
                       </TooltipContent>
                     </Tooltip>
                   </div>
@@ -668,18 +767,17 @@ export default function SentimentPage() {
                     </button>
                   </TooltipTrigger>
                   <TooltipContent className="max-w-xs">
-                    <p className="text-xs text-ink-900">{METRIC_TOOLTIPS.sentimentDistribution.zh}</p>
-                    <p className="text-xs text-ink-500 mt-1">{METRIC_TOOLTIPS.sentimentDistribution.en}</p>
+                    <p className="text-xs text-ink-900">{getTooltipContent("Sentiment Distribution_tooltip", language)}</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
-              <div className="h-[360px]">
+              <div className="h-[350px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={sentimentData?.sources || []}
-                    margin={{ top: 5, right: 30, left: 5, bottom: 30 }}
-                    barCategoryGap="80%"
-                    barSize={20}
+                    margin={{ top: 5, right: 30, left: 5, bottom: 0 }}
+                    barCategoryGap="15%"
+                    barSize={25}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#EEF2F7" vertical={false} />
                     <XAxis
@@ -689,6 +787,7 @@ export default function SentimentPage() {
                       style={{ fontSize: "11px" }}
                       axisLine={false}
                       tickLine={false}
+                      tickFormatter={(value) => translate(value, language)}
                     />
                     <YAxis
                       type="number"
@@ -697,6 +796,7 @@ export default function SentimentPage() {
                       style={{ fontSize: "11px" }}
                       axisLine={false}
                       tickLine={false}
+                      tickFormatter={(value) => `${value}%`}
                     />
                     <RechartsTooltip
                       contentStyle={{
@@ -707,21 +807,40 @@ export default function SentimentPage() {
                         padding: "8px 12px",
                       }}
                       labelStyle={{ color: INK_COLORS[900], marginBottom: "4px", fontSize: "11px" }}
+                      labelFormatter={(value) => translate(value, language)}
                     />
-                    <Bar dataKey="pos" name={translate("Positive", language)} fill={SEMANTIC_COLORS.info} radius={[6, 6, 0, 0]} />
-                    <Bar dataKey="neu" name={translate("Neutral", language)} fill={INK_COLORS[400]} radius={[6, 6, 0, 0]} />
-                    <Bar dataKey="neg" name={translate("Negative", language)} fill={SEMANTIC_COLORS.bad} radius={[6, 6, 0, 0]} />
+                    <Bar 
+                      dataKey="pos" 
+                      name={translate("Positive", language)} 
+                      fill={SEMANTIC_COLORS.info} 
+                      stackId="sentiment"
+                      radius={[0, 0, 0, 0]}
+                    />
+                    <Bar 
+                      dataKey="neu" 
+                      name={translate("Neutral", language)} 
+                      fill={INK_COLORS[400]} 
+                      stackId="sentiment"
+                      radius={[0, 0, 0, 0]}
+                    />
+                    <Bar 
+                      dataKey="neg" 
+                      name={translate("Negative", language)} 
+                      fill={SEMANTIC_COLORS.bad} 
+                      stackId="sentiment"
+                      radius={[6, 6, 0, 0]}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            {/* Right: Topics */}
+            {/* Right: Response Themes */}
             <div className="xl:col-span-4 space-y-4">
-              {/* Top Positive Topics */}
-              <div className="rounded-lg border border-ink-200 bg-white p-5 shadow-subtle hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-semibold text-ink-900">{translate("Top Positive Topics", language)}</h2>
+              {/* Top Positive Response Themes */}
+              <div className="rounded-lg border border-ink-200 bg-white py-6 px-5 shadow-subtle hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-sm font-semibold text-ink-900">{translate("Top Positive Response Themes", language)}</h2>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button type="button" className="text-ink-400 hover:text-ink-600 transition-colors">
@@ -729,12 +848,11 @@ export default function SentimentPage() {
                       </button>
                     </TooltipTrigger>
                     <TooltipContent className="max-w-xs">
-                      <p className="text-xs text-ink-900">{METRIC_TOOLTIPS.positiveTopics.zh}</p>
-                      <p className="text-xs text-ink-500 mt-1">{METRIC_TOOLTIPS.positiveTopics.en}</p>
+                      <p className="text-xs text-ink-900">{getTooltipContent("Top Positive Topics_tooltip", language)}</p>
                     </TooltipContent>
                   </Tooltip>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {positiveTopicList.length > 0 ? (
                     positiveTopicList.map((item, idx) => (
                       <div key={`${item.topic}-${idx}`} className="flex items-center justify-between text-xs">
@@ -743,15 +861,15 @@ export default function SentimentPage() {
                       </div>
                     ))
                   ) : (
-                    <div className="text-xs text-ink-500 py-2">No positive topics available</div>
+                    <div className="text-xs text-ink-500 py-2">{translate("No positive topics available", language)}</div>
                   )}
                 </div>
               </div>
 
-              {/* Top Negative Topics */}
-              <div className="rounded-lg border border-ink-200 bg-white p-5 shadow-subtle hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-semibold text-ink-900">{translate("Top Negative Topics", language)}</h2>
+              {/* Top Negative Response Themes */}
+              <div className="rounded-lg border border-ink-200 bg-white py-6 px-5 shadow-subtle hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-sm font-semibold text-ink-900">{translate("Top Negative Response Themes", language)}</h2>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button type="button" className="text-ink-400 hover:text-ink-600 transition-colors">
@@ -759,21 +877,20 @@ export default function SentimentPage() {
                       </button>
                     </TooltipTrigger>
                     <TooltipContent className="max-w-xs">
-                      <p className="text-xs text-ink-900">{METRIC_TOOLTIPS.negativeTopics.zh}</p>
-                      <p className="text-xs text-ink-500 mt-1">{METRIC_TOOLTIPS.negativeTopics.en}</p>
+                      <p className="text-xs text-ink-900">{getTooltipContent("Top Negative Topics_tooltip", language)}</p>
                     </TooltipContent>
                   </Tooltip>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {negativeTopicList.length > 0 ? (
                     negativeTopicList.map((item, idx) => (
                       <div key={`${item.topic}-${idx}`} className="flex items-center justify-between text-xs">
-                        <span className="text-ink-700 truncate flex-1 mr-2">{translate(item.topic, language)}</span>
+                        <span className="text-ink-700 truncate flex-1 mr-2">{translate(item.topic, "en")}</span>
                         <span className="text-ink-900 font-medium">{Math.round(item.score * 100)}%</span>
                       </div>
                     ))
                   ) : (
-                    <div className="text-xs text-ink-500 py-2">No negative topics available</div>
+                    <div className="text-xs text-ink-500 py-2">{translate("No negative topics available", language)}</div>
                   )}
                 </div>
               </div>

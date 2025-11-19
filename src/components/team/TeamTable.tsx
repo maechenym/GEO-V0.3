@@ -252,11 +252,11 @@ export function TeamTable({ members, onUpdateRole }: TeamTableProps) {
       <AlertDialog open={dialogMode === "forbidden"} onOpenChange={handleDialogClose}>
         <AlertDialogContent role="alertdialog">
           <AlertDialogHeader>
-            <AlertDialogTitle>无权限</AlertDialogTitle>
-            <AlertDialogDescription>仅管理员可删除成员。</AlertDialogDescription>
+            <AlertDialogTitle>{translate("No permission", language)}</AlertDialogTitle>
+            <AlertDialogDescription>{translate("Only administrators can delete members.", language)}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction onClick={handleDialogClose}>我知道了</AlertDialogAction>
+            <AlertDialogAction onClick={handleDialogClose}>{translate("I understand", language)}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -265,11 +265,11 @@ export function TeamTable({ members, onUpdateRole }: TeamTableProps) {
       <AlertDialog open={dialogMode === "onlyOneMember"} onOpenChange={handleDialogClose}>
         <AlertDialogContent role="alertdialog">
           <AlertDialogHeader>
-            <AlertDialogTitle>无法删除，当前team仅有一位成员无法删除</AlertDialogTitle>
-            <AlertDialogDescription>请先邀请新成员后再删除当前成员。</AlertDialogDescription>
+            <AlertDialogTitle>{translate("Cannot delete, current team has only one member", language)}</AlertDialogTitle>
+            <AlertDialogDescription>{translate("Please invite a new member before deleting the current member.", language)}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction onClick={handleDialogClose}>我知道了</AlertDialogAction>
+            <AlertDialogAction onClick={handleDialogClose}>{translate("I understand", language)}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -278,21 +278,21 @@ export function TeamTable({ members, onUpdateRole }: TeamTableProps) {
       <AlertDialog open={dialogMode === "confirm"} onOpenChange={handleDialogClose}>
         <AlertDialogContent role="alertdialog">
           <AlertDialogHeader>
-            <AlertDialogTitle>确定删除吗？</AlertDialogTitle>
+            <AlertDialogTitle>{translate("Confirm deletion?", language)}</AlertDialogTitle>
             <AlertDialogDescription>
               {memberToDelete
-                ? `此操作将移除成员 ${memberToDelete.email} 的访问权限。`
-                : "此操作将移除该成员的访问权限。"}
+                ? `${translate("This action will remove access for member", language)} ${memberToDelete.email} ${translate("'s access permissions.", language)}`
+                : translate("This action will remove access for this member.", language)}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogCancel>{translate("Cancel", language)}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteConfirm}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               autoFocus
             >
-              确认
+              {translate("Confirm", language)}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

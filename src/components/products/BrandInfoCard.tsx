@@ -38,6 +38,8 @@ import { FormMessage } from "@/components/ui/form-message"
 import type { Brand, Product } from "@/types/products"
 import { usePlanStore } from "@/store/plan.store"
 import { useBrandUIStore } from "@/store/brand-ui.store"
+import { useLanguageStore } from "@/store/language.store"
+import { translate } from "@/lib/i18n"
 import {
   useUpdateBrand,
   useCreateBrand,
@@ -80,6 +82,7 @@ export function BrandInfoCard({
 }: BrandInfoCardProps) {
   const { setDirty, markSaved } = useBrandUIStore()
   const { getMaxProducts } = usePlanStore()
+  const { language } = useLanguageStore()
   const updateBrandMutation = useUpdateBrand()
   const createBrandMutation = useCreateBrand()
   const createProductMutation = useCreateProduct(brand?.id || null)
@@ -381,19 +384,19 @@ export function BrandInfoCard({
       <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Product</AlertDialogTitle>
+            <AlertDialogTitle>{translate("Delete Product", language)}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this product? This action cannot be undone.
+              {translate("Are you sure you want to delete this product? This action cannot be undone.", language)}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{translate("Cancel", language)}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteProduct}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={deleteProductMutation.isPending}
             >
-              {deleteProductMutation.isPending ? "Deleting..." : "Delete"}
+              {deleteProductMutation.isPending ? translate("Deleting...", language) : translate("Delete", language)}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

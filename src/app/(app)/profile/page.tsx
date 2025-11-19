@@ -2,7 +2,6 @@
 
 import { useAuthStore } from "@/store/auth.store"
 import { useLanguageStore } from "@/store/language.store"
-import { Button } from "@/components/ui/button"
 import {
   Select,
   SelectContent,
@@ -10,8 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { LogOut, Mail, Globe, Calendar, Clock } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { Mail, Globe, Calendar, Clock } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { translate } from "@/lib/i18n"
 import { useQuery } from "@tanstack/react-query"
@@ -32,9 +30,8 @@ interface PlanResponse {
 }
 
 export default function ProfilePage() {
-  const { profile, logout } = useAuthStore()
+  const { profile } = useAuthStore()
   const { language, setLanguage } = useLanguageStore()
-  const router = useRouter()
 
   const { data: planData } = useQuery<PlanResponse>({
     queryKey: ["currentPlan"],
@@ -45,11 +42,6 @@ export default function ProfilePage() {
     staleTime: 5 * 60 * 1000,
     retry: 1,
   })
-
-  const handleLogout = async () => {
-    await logout()
-    router.push("/login")
-  }
 
   const handleLanguageChange = (value: string) => {
     setLanguage(value as "en" | "zh-TW")
@@ -119,21 +111,6 @@ export default function ProfilePage() {
                   </span>
                   <p className="text-sm">{profile?.email || translate("Not available", language)}</p>
                 </div>
-
-                <div className="h-px bg-border" />
-
-                <div className="space-y-1">
-                  <span className="text-sm font-medium text-muted-foreground">
-                    {translate("Brand Status", language)}
-                  </span>
-                  <p className="text-sm">
-                    {profile?.hasBrand ? (
-                      <span className="text-green-600">{translate("Brand configured", language)}</span>
-                    ) : (
-                      <span className="text-muted-foreground">{translate("No brand configured", language)}</span>
-                    )}
-                  </p>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -198,23 +175,6 @@ export default function ProfilePage() {
               </CardContent>
             </Card>
           )}
-
-          <Card className="rounded-2xl">
-            <CardHeader>
-              <CardTitle className="text-lg">{translate("Actions", language)}</CardTitle>
-              <p className="text-sm text-muted-foreground">{translate("Account actions", language)}</p>
-            </CardHeader>
-            <CardContent>
-              <Button
-                onClick={handleLogout}
-                variant="destructive"
-                className="w-full sm:w-auto"
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                {translate("Logout", language)}
-              </Button>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>

@@ -37,6 +37,8 @@ import {
 import { FormMessage } from "@/components/ui/form-message"
 import type { Persona } from "@/types/products"
 import { useBrandUIStore } from "@/store/brand-ui.store"
+import { useLanguageStore } from "@/store/language.store"
+import { translate } from "@/lib/i18n"
 import {
   useUpdatePersona,
   useDeletePersona,
@@ -70,6 +72,7 @@ type PersonaForm = z.infer<typeof personaSchema>
 
 export function PersonasCard({ personas, brandId }: PersonasCardProps) {
   const { markSaved } = useBrandUIStore()
+  const { language } = useLanguageStore()
 
   const updatePersonaMutation = useUpdatePersona(brandId)
   const deletePersonaMutation = useDeletePersona(brandId)
@@ -281,19 +284,19 @@ export function PersonasCard({ personas, brandId }: PersonasCardProps) {
       <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Persona</AlertDialogTitle>
+            <AlertDialogTitle>{translate("Delete Persona", language)}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this persona? This action cannot be undone.
+              {translate("Are you sure you want to delete this persona? This action cannot be undone.", language)}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{translate("Cancel", language)}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeletePersona}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={deletePersonaMutation.isPending}
             >
-              {deletePersonaMutation.isPending ? "Deleting..." : "Delete"}
+              {deletePersonaMutation.isPending ? translate("Deleting...", language) : translate("Delete", language)}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

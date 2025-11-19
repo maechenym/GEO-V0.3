@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useToast } from "@/hooks/use-toast"
+import { useLanguageStore } from "@/store/language.store"
+import { translate } from "@/lib/i18n"
 import * as productsApi from "@/services/products"
 import type {
   Brand,
@@ -56,6 +58,7 @@ export function useBrand(id: string | null) {
 export function useCreateBrand() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { language } = useLanguageStore()
 
   return useMutation({
     mutationFn: (data: CreateBrandRequest) => productsApi.createBrand(data),
@@ -63,14 +66,14 @@ export function useCreateBrand() {
       queryClient.invalidateQueries({ queryKey: queryKeys.brands })
       queryClient.setQueryData(queryKeys.brand(newBrand.id), { brand: newBrand })
       toast({
-        title: "Brand Created",
-        description: `"${newBrand.name}" has been created successfully`,
+        title: translate("Brand Created", language),
+        description: `"${newBrand.name}" ${translate("has been created successfully", language)}`,
       })
     },
     onError: (error: any) => {
       toast({
-        title: "Failed to Create Brand",
-        description: error?.response?.data?.error || error?.message || "Please try again",
+        title: translate("Failed to Create Brand", language),
+        description: error?.response?.data?.error || error?.message || translate("Please try again", language),
         variant: "destructive",
       })
     },
@@ -80,6 +83,7 @@ export function useCreateBrand() {
 export function useUpdateBrand() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { language } = useLanguageStore()
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateBrandRequest }) =>
@@ -88,14 +92,14 @@ export function useUpdateBrand() {
       queryClient.invalidateQueries({ queryKey: queryKeys.brands })
       queryClient.setQueryData(queryKeys.brand(updatedBrand.id), { brand: updatedBrand })
       toast({
-        title: "Changes Saved",
-        description: "Brand information updated successfully",
+        title: translate("Changes Saved", language),
+        description: translate("Brand information updated successfully", language),
       })
     },
     onError: (error: any) => {
       toast({
-        title: "Failed to Save",
-        description: error?.response?.data?.error || error?.message || "Please try again",
+        title: translate("Failed to Save", language),
+        description: error?.response?.data?.error || error?.message || translate("Please try again", language),
         variant: "destructive",
       })
     },
@@ -105,20 +109,21 @@ export function useUpdateBrand() {
 export function useDeleteBrand() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { language } = useLanguageStore()
 
   return useMutation({
     mutationFn: (id: string) => productsApi.deleteBrand(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.brands })
       toast({
-        title: "Brand Deleted",
-        description: "Brand has been removed successfully",
+        title: translate("Brand Deleted", language),
+        description: translate("has been deleted successfully", language),
       })
     },
     onError: (error: any) => {
       toast({
-        title: "Failed to Delete",
-        description: error?.response?.data?.error || error?.message || "Please try again",
+        title: translate("Failed to Delete Brand", language),
+        description: error?.response?.data?.error || error?.message || translate("Please try again", language),
         variant: "destructive",
       })
     },
@@ -143,6 +148,7 @@ export function useProducts(brandId: string | null) {
 export function useCreateProduct(brandId: string | null) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { language } = useLanguageStore()
 
   return useMutation({
     mutationFn: (data: CreateProductRequest) => {
@@ -155,14 +161,14 @@ export function useCreateProduct(brandId: string | null) {
       // Invalidate and refetch products list
       queryClient.invalidateQueries({ queryKey: queryKeys.products(brandId!) })
       toast({
-        title: "Product Added",
-        description: "Product has been added successfully",
+        title: translate("Product Added", language),
+        description: translate("Product has been added successfully", language),
       })
     },
     onError: (error: any) => {
       toast({
-        title: "Failed to Add Product",
-        description: error?.response?.data?.error || error?.message || "Please try again",
+        title: translate("Failed to Add Product", language),
+        description: error?.response?.data?.error || error?.message || translate("Please try again", language),
         variant: "destructive",
       })
     },
@@ -172,6 +178,7 @@ export function useCreateProduct(brandId: string | null) {
 export function useUpdateProduct(brandId: string | null) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { language } = useLanguageStore()
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateProductRequest }) =>
@@ -179,14 +186,14 @@ export function useUpdateProduct(brandId: string | null) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products(brandId!) })
       toast({
-        title: "Product Updated",
-        description: "Product has been updated successfully",
+        title: translate("Product Updated", language),
+        description: translate("Product has been updated successfully", language),
       })
     },
     onError: (error: any) => {
       toast({
-        title: "Failed to Update",
-        description: error?.response?.data?.error || error?.message || "Please try again",
+        title: translate("Failed to Update", language),
+        description: error?.response?.data?.error || error?.message || translate("Please try again", language),
         variant: "destructive",
       })
     },
@@ -196,20 +203,21 @@ export function useUpdateProduct(brandId: string | null) {
 export function useDeleteProduct(brandId: string | null) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { language } = useLanguageStore()
 
   return useMutation({
     mutationFn: (id: string) => productsApi.deleteProduct(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products(brandId!) })
       toast({
-        title: "Product Deleted",
-        description: "Product has been removed successfully",
+        title: translate("Product Deleted", language),
+        description: translate("Product has been removed successfully", language),
       })
     },
     onError: (error: any) => {
       toast({
-        title: "Failed to Delete",
-        description: error?.response?.data?.error || error?.message || "Please try again",
+        title: translate("Failed to Delete Product", language),
+        description: error?.response?.data?.error || error?.message || translate("Please try again", language),
         variant: "destructive",
       })
     },
@@ -234,6 +242,7 @@ export function usePersonas(brandId: string | null) {
 export function useCreatePersona(brandId: string | null) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { language } = useLanguageStore()
 
   return useMutation({
     mutationFn: (data: CreatePersonaRequest) => {
@@ -246,14 +255,14 @@ export function useCreatePersona(brandId: string | null) {
       // Invalidate and refetch personas list
       queryClient.invalidateQueries({ queryKey: queryKeys.personas(brandId!) })
       toast({
-        title: "Persona Added",
-        description: "Persona has been added successfully",
+        title: translate("Persona Added", language),
+        description: translate("Persona has been added successfully", language),
       })
     },
     onError: (error: any) => {
       toast({
-        title: "Failed to Add Persona",
-        description: error?.response?.data?.error || error?.message || "Please try again",
+        title: translate("Failed to Add Persona", language),
+        description: error?.response?.data?.error || error?.message || translate("Please try again", language),
         variant: "destructive",
       })
     },
@@ -263,6 +272,7 @@ export function useCreatePersona(brandId: string | null) {
 export function useUpdatePersona(brandId: string | null) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { language } = useLanguageStore()
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdatePersonaRequest }) =>
@@ -270,14 +280,14 @@ export function useUpdatePersona(brandId: string | null) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.personas(brandId!) })
       toast({
-        title: "Persona Updated",
-        description: "Persona has been updated successfully",
+        title: translate("Persona Updated", language),
+        description: translate("Persona has been updated successfully", language),
       })
     },
     onError: (error: any) => {
       toast({
-        title: "Failed to Update",
-        description: error?.response?.data?.error || error?.message || "Please try again",
+        title: translate("Failed to Update", language),
+        description: error?.response?.data?.error || error?.message || translate("Please try again", language),
         variant: "destructive",
       })
     },
@@ -287,20 +297,21 @@ export function useUpdatePersona(brandId: string | null) {
 export function useDeletePersona(brandId: string | null) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { language } = useLanguageStore()
 
   return useMutation({
     mutationFn: (id: string) => productsApi.deletePersona(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.personas(brandId!) })
       toast({
-        title: "Persona Deleted",
-        description: "Persona has been removed successfully",
+        title: translate("Persona Deleted", language),
+        description: translate("Persona has been removed successfully", language),
       })
     },
     onError: (error: any) => {
       toast({
-        title: "Failed to Delete",
-        description: error?.response?.data?.error || error?.message || "Please try again",
+        title: translate("Failed to Delete Persona", language),
+        description: error?.response?.data?.error || error?.message || translate("Please try again", language),
         variant: "destructive",
       })
     },
@@ -340,6 +351,7 @@ export function useCompetitorsByProduct(productId: string | null) {
 export function useCreateCompetitor(brandId: string | null) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { language } = useLanguageStore()
 
   return useMutation({
     mutationFn: (data: CreateCompetitorRequest) => {
@@ -352,14 +364,14 @@ export function useCreateCompetitor(brandId: string | null) {
       // Invalidate and refetch competitors list
       queryClient.invalidateQueries({ queryKey: queryKeys.competitors(brandId!) })
       toast({
-        title: "Competitor Added",
-        description: "Competitor has been added successfully",
+        title: translate("Competitor Added", language),
+        description: translate("Competitor has been added successfully", language),
       })
     },
     onError: (error: any) => {
       toast({
-        title: "Failed to Add Competitor",
-        description: error?.response?.data?.error || error?.message || "Please try again",
+        title: translate("Failed to Add Competitor", language),
+        description: error?.response?.data?.error || error?.message || translate("Please try again", language),
         variant: "destructive",
       })
     },
@@ -369,6 +381,7 @@ export function useCreateCompetitor(brandId: string | null) {
 export function useCreateCompetitorForProduct(productId: string | null) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { language } = useLanguageStore()
 
   return useMutation({
     mutationFn: (data: CreateCompetitorRequest) => {
@@ -381,14 +394,14 @@ export function useCreateCompetitorForProduct(productId: string | null) {
       // Invalidate and refetch competitors list for this product
       queryClient.invalidateQueries({ queryKey: queryKeys.competitorsByProduct(productId!) })
       toast({
-        title: "Competitor Added",
-        description: "Competitor has been added successfully",
+        title: translate("Competitor Added", language),
+        description: translate("Competitor has been added successfully", language),
       })
     },
     onError: (error: any) => {
       toast({
-        title: "Failed to Add Competitor",
-        description: error?.response?.data?.error || error?.message || "Please try again",
+        title: translate("Failed to Add Competitor", language),
+        description: error?.response?.data?.error || error?.message || translate("Please try again", language),
         variant: "destructive",
       })
     },
@@ -398,6 +411,7 @@ export function useCreateCompetitorForProduct(productId: string | null) {
 export function useUpdateCompetitor(brandId: string | null, productId?: string | null) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { language } = useLanguageStore()
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateCompetitorRequest }) =>
@@ -411,14 +425,14 @@ export function useUpdateCompetitor(brandId: string | null, productId?: string |
         queryClient.invalidateQueries({ queryKey: queryKeys.competitorsByProduct(productId) })
       }
       toast({
-        title: "Competitor Updated",
-        description: "Competitor has been updated successfully",
+        title: translate("Competitor Updated", language),
+        description: translate("Competitor has been updated successfully", language),
       })
     },
     onError: (error: any) => {
       toast({
-        title: "Failed to Update",
-        description: error?.response?.data?.error || error?.message || "Please try again",
+        title: translate("Failed to Update", language),
+        description: error?.response?.data?.error || error?.message || translate("Please try again", language),
         variant: "destructive",
       })
     },
@@ -428,6 +442,7 @@ export function useUpdateCompetitor(brandId: string | null, productId?: string |
 export function useDeleteCompetitor(brandId: string | null, productId?: string | null) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { language } = useLanguageStore()
 
   return useMutation({
     mutationFn: (id: string) => productsApi.deleteCompetitor(id),
@@ -440,14 +455,14 @@ export function useDeleteCompetitor(brandId: string | null, productId?: string |
         queryClient.invalidateQueries({ queryKey: queryKeys.competitorsByProduct(productId) })
       }
       toast({
-        title: "Competitor Deleted",
-        description: "Competitor has been removed successfully",
+        title: translate("Competitor Deleted", language),
+        description: translate("Competitor has been removed successfully", language),
       })
     },
     onError: (error: any) => {
       toast({
-        title: "Failed to Delete",
-        description: error?.response?.data?.error || error?.message || "Please try again",
+        title: translate("Failed to Delete Competitor", language),
+        description: error?.response?.data?.error || error?.message || translate("Please try again", language),
         variant: "destructive",
       })
     },
