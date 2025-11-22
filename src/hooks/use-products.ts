@@ -326,10 +326,16 @@ export function useCompetitors(brandId: string | null) {
     queryKey: queryKeys.competitors(brandId!),
     queryFn: async () => {
       const competitors = await productsApi.getCompetitors(brandId!)
+      console.log("[useCompetitors] Fetched competitors:", competitors.length)
+      const targetBanks = ["国泰世华银行", "玉山银行", "台新银行"]
+      const found = competitors.filter(c => targetBanks.includes(c.name))
+      if (found.length > 0) {
+        console.log("[useCompetitors] Target banks found:", found.map(c => c.name))
+      }
       return { competitors }
     },
     enabled: !!brandId,
-    staleTime: 60 * 1000,
+    staleTime: 0, // 禁用缓存，确保每次都获取最新数据
   })
 }
 
@@ -341,10 +347,16 @@ export function useCompetitorsByProduct(productId: string | null) {
     queryKey: queryKeys.competitorsByProduct(productId!),
     queryFn: async () => {
       const competitors = await productsApi.getCompetitorsByProduct(productId!)
+      console.log("[useCompetitorsByProduct] Fetched competitors:", competitors.length)
+      const targetBanks = ["国泰世华银行", "玉山银行", "台新银行"]
+      const found = competitors.filter(c => targetBanks.includes(c.name))
+      if (found.length > 0) {
+        console.log("[useCompetitorsByProduct] Target banks found:", found.map(c => c.name))
+      }
       return { competitors }
     },
     enabled: !!productId,
-    staleTime: 60 * 1000,
+    staleTime: 0, // 禁用缓存，确保每次都获取最新数据
   })
 }
 

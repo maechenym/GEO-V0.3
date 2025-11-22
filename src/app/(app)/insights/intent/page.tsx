@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import React from "react"
 import { motion } from "framer-motion"
-import { ChevronDown, ChevronUp, HelpCircle } from "lucide-react"
+import { ChevronDown, ChevronUp, HelpCircle, MoreHorizontal } from "lucide-react"
 import {
   BarChart,
   Bar,
@@ -23,6 +23,20 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { PageHeaderFilterBar } from "@/components/filters/PageHeaderFilterBar"
 import { FadeUp, StaggerContainer, staggerItem } from "@/lib/animations"
 import { mockIntentKpis, mockTopicRows, simulateLoad } from "@/mocks/intent"
@@ -31,6 +45,7 @@ import { useBrandUIStore } from "@/store/brand-ui.store"
 import { useLanguageStore } from "@/store/language.store"
 import { translate, getTooltipContent } from "@/lib/i18n"
 import { getDefaultDateRange, getUserRegisteredAt, getTodayShanghai, formatDateShanghai } from "@/lib/date-utils"
+import { exportToCSV } from "@/lib/export-utils"
 import { INK_COLORS, CHART_PRIMARY_COLOR } from "@/lib/design-tokens"
 import { MODEL_OPTIONS } from "@/constants/models"
 import type { ModelOptionValue } from "@/constants/models"
@@ -104,9 +119,13 @@ export default function IntentPage() {
 
   // Sort state for expanded table (per topic)
   const [expandedTableSort, setExpandedTableSort] = useState<{
-    column: "rank" | "focus" | null
+    column: "position" | "focus" | null
     order: "asc" | "desc"
   }>({ column: null, order: "asc" })
+
+  // AI Response drawer state
+  const [aiResponseDrawerOpen, setAiResponseDrawerOpen] = useState(false)
+  const [selectedAiResponse, setSelectedAiResponse] = useState<{ text: string; response: string } | null>(null)
 
   // Fetch data from API
   const { data: apiData, isLoading: loading, error: apiError } = useQuery<{
@@ -169,11 +188,11 @@ export default function IntentPage() {
       case "topicHot":
         cloned.sort((a, b) => b.promptCount - a.promptCount)
         break
-      case "rankAsc":
-        cloned.sort((a, b) => (a.rank || 999) - (b.rank || 999))
+      case "positionAsc":
+        cloned.sort((a, b) => (a.position || 999) - (b.position || 999))
         break
-      case "rankDesc":
-        cloned.sort((a, b) => (b.rank || 999) - (a.rank || 999))
+      case "positionDesc":
+        cloned.sort((a, b) => (b.position || 999) - (a.position || 999))
         break
       case "reachAsc":
         cloned.sort((a, b) => a.mentionRate - b.mentionRate)
@@ -233,12 +252,12 @@ export default function IntentPage() {
     // Total queries should be at least 15 times more than core queries (topicCount)
     // So totalQueries >= topicCount * 16 (at least 16 times, which is 15 times more)
     const totalQueries = Math.max(topicCount * 16, promptCount + 1000)
-    const topicAvgRanks = filteredRows.map((t) => {
-      const ranks = t.prompts.map((p) => p.rank || 6)
-      return ranks.length ? ranks.reduce((a, b) => a + b, 0) / ranks.length : 6
+    const topicAvgPositions = filteredRows.map((t) => {
+      const positions = t.prompts.map((p) => p.position || 6)
+      return positions.length ? positions.reduce((a, b) => a + b, 0) / positions.length : 6
     })
-    const compositeRank = topicAvgRanks.length
-      ? Math.max(1, Math.round(topicAvgRanks.reduce((a, b) => a + b, 0) / topicAvgRanks.length))
+    const compositeRank = topicAvgPositions.length
+      ? Math.max(1, Math.round(topicAvgPositions.reduce((a, b) => a + b, 0) / topicAvgPositions.length))
       : kpis.compositeRank
     return { ...kpis, topicCount, promptCount, totalQueries, compositeRank }
   }, [kpis, filteredRows])
@@ -318,7 +337,7 @@ export default function IntentPage() {
   const chartData = useMemo(() => {
     if (intentDistribution.length === 0) return []
     
-    const dataObj: Record<string, number | string> = { name: "Intent" }
+    const dataObj: Record<string, number | string> = { name: translate("Intent", language) }
     intentDistribution.forEach((item) => {
       dataObj[item.intentKey] = item.percentage
     })
@@ -346,8 +365,53 @@ export default function IntentPage() {
   }, [intentDistribution])
 
   const handleExport = () => {
-    // TODO: Implement export functionality
-    console.log("Export", filteredRows.length)
+    if (!filteredRows || filteredRows.length === 0) return
+    
+    try {
+      // Prepare CSV data for the current selected date range
+      const csvData: Array<Record<string, any>> = []
+      
+      // Add header row
+      const headers = [
+        language === "zh-TW" ? "统计时间" : "Date",
+        language === "zh-TW" ? "品牌" : "Brand",
+        language === "zh-TW" ? "产品" : "Product",
+        language === "zh-TW" ? "模型平台" : "Model Platform",
+        language === "zh-TW" ? "核心查询" : "Core Query",
+        language === "zh-TW" ? "意图" : "Intent",
+        language === "zh-TW" ? "可见度" : "Visibility",
+        language === "zh-TW" ? "提及率" : "Mention Rate",
+        language === "zh-TW" ? "是否提及品牌" : "Mention Brand",
+        language === "zh-TW" ? "情绪评分" : "Sentiment",
+      ]
+      
+      // Add data rows - export all filtered rows for the selected date range
+      filteredRows.forEach((row) => {
+        row.prompts.forEach((prompt) => {
+          csvData.push({
+            [headers[0]]: `${formatDateShanghai(dateRange.start)} ~ ${formatDateShanghai(dateRange.end)}`,
+            [headers[1]]: selectedBrandId || "All",
+            [headers[2]]: selectedProductId || "All",
+            [headers[3]]: prompt.platform || selectedModel || "All",
+            [headers[4]]: row.query,
+            [headers[5]]: row.intent || "Other",
+            [headers[6]]: row.visibility.toFixed(2),
+            [headers[7]]: `${(row.mentionRate * 100).toFixed(1)}%`,
+            [headers[8]]: prompt.mentionsBrand ? (language === "zh-TW" ? "是" : "Yes") : (language === "zh-TW" ? "否" : "No"),
+            [headers[9]]: row.sentiment?.toFixed(2) || "0.00",
+          })
+        })
+      })
+      
+      // Export to CSV
+      const filename = `intent_${formatDateShanghai(dateRange.start)}_${formatDateShanghai(dateRange.end)}.csv`
+      exportToCSV(csvData, filename, headers)
+      
+      // Show success message (you may want to add toast here)
+      console.log(`Exported ${csvData.length} rows for date range ${formatDateShanghai(dateRange.start)} ~ ${formatDateShanghai(dateRange.end)}`)
+    } catch (error) {
+      console.error("Error exporting intent data:", error)
+    }
   }
 
   const handleOpenDetail = (payload: { prompt?: PromptItem; topic?: TopicRow }) => {
@@ -397,12 +461,8 @@ export default function IntentPage() {
     <TooltipProvider>
       <div className="bg-background -mx-6">
         <PageHeaderFilterBar
-          title={language === "zh-TW" ? "查詢分析" : "Queries"}
-          description={
-            language === "zh-TW"
-              ? "分析 AI 提示和回答以了解查詢可見度和情緒"
-              : "Analyze AI prompts and answers to understand query visibility and sentiment"
-          }
+          title={translate("Queries", language)}
+          description={translate("Analyze AI prompts and answers to understand query visibility and sentiment", language)}
           startDate={dateRange.start}
           endDate={dateRange.end}
           onDateChange={handleDateRangeChange}
@@ -427,7 +487,7 @@ export default function IntentPage() {
                 <Card className="rounded-2xl shadow-sm hover:shadow-md transition-shadow w-full flex flex-col">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base font-semibold text-black dark:text-white flex items-center gap-2">
-                      Core Queries
+                      {translate("Core Queries", language)}
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <button className="text-muted-foreground hover:text-foreground transition-colors">
@@ -451,7 +511,7 @@ export default function IntentPage() {
                 <Card className="rounded-2xl shadow-sm hover:shadow-md transition-shadow w-full flex flex-col">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base font-semibold text-black dark:text-white flex items-center gap-2">
-                      Total Queries
+                      {translate("Total Queries", language)}
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <button className="text-muted-foreground hover:text-foreground transition-colors">
@@ -475,7 +535,7 @@ export default function IntentPage() {
                 <Card className="rounded-2xl shadow-sm hover:shadow-md transition-shadow w-full flex flex-col">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base font-semibold text-black dark:text-white flex items-center gap-2">
-                      Intent Distribution
+                      {translate("Intent Distribution", language)}
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <button className="text-muted-foreground hover:text-foreground transition-colors">
@@ -587,7 +647,7 @@ export default function IntentPage() {
           <Card className="rounded-2xl shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                Core Queries
+                {translate("Core Queries", language)}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button className="text-muted-foreground hover:text-foreground transition-colors">
@@ -603,16 +663,16 @@ export default function IntentPage() {
             <CardContent>
               {loading ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="text-sm text-muted-foreground">Loading...</div>
+                  <div className="text-sm text-muted-foreground">{translate("Loading...", language)}</div>
                 </div>
               ) : error ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="text-sm text-destructive">Error loading data</div>
+                  <div className="text-sm text-destructive">{translate("Error loading data", language)}</div>
                 </div>
               ) : filteredRows.length === 0 ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="text-sm text-muted-foreground">
-                    No data available. Try adjusting filters.
+                    {translate("No data available. Try adjusting filters.", language)}
                   </div>
                 </div>
               ) : (
@@ -637,7 +697,7 @@ export default function IntentPage() {
                         </th>
                         <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground">
                           <div className="flex items-center justify-end gap-2">
-                            <span>Total Queries</span>
+                            <span>{translate("Total Queries", language)}</span>
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <button className="text-muted-foreground hover:text-foreground transition-colors">
@@ -650,6 +710,9 @@ export default function IntentPage() {
                             </Tooltip>
                           </div>
                         </th>
+                        {/* Reach, Rank, Focus, Sentiment 列暂时隐藏，后续版本会补上 */}
+                        {/* Reach, Rank, Focus, Sentiment columns temporarily hidden, will be added in future version */}
+                        {/* 
                         <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground">
                           <div className="flex items-center justify-end gap-1">
                             <button
@@ -688,21 +751,21 @@ export default function IntentPage() {
                           <div className="flex items-center justify-end gap-1">
                             <button
                               onClick={() => {
-                                if (sortKey === "rankDesc") {
-                                  setSortKey("rankAsc")
+                                if (sortKey === "positionDesc") {
+                                  setSortKey("positionAsc")
                                 } else {
-                                  setSortKey("rankDesc")
+                                  setSortKey("positionDesc")
                                 }
                               }}
                               className="flex items-center justify-center gap-1 hover:text-foreground transition-colors group"
                             >
-                            <span>Rank</span>
+                            <span>{translate("Position", language)}</span>
                               <div className="flex flex-col">
                                 <ChevronUp 
-                                  className={`h-3 w-3 transition-colors ${sortKey === "rankDesc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
+                                  className={`h-3 w-3 transition-colors ${sortKey === "positionDesc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
                                 />
                                 <ChevronDown 
-                                  className={`h-3 w-3 -mt-1 transition-colors ${sortKey === "rankAsc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
+                                  className={`h-3 w-3 -mt-1 transition-colors ${sortKey === "positionAsc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
                                 />
                               </div>
                             </button>
@@ -713,7 +776,7 @@ export default function IntentPage() {
                                 </button>
                               </TooltipTrigger>
                               <TooltipContent>
-                                <p>{getTooltipContent("Rank", language)}</p>
+                                <p>{getTooltipContent("Position", language)}</p>
                               </TooltipContent>
                             </Tooltip>
                           </div>
@@ -786,6 +849,7 @@ export default function IntentPage() {
                             </Tooltip>
                           </div>
                         </th>
+                        */}
                       </tr>
                     </thead>
                     <tbody>
@@ -814,11 +878,14 @@ export default function IntentPage() {
                               <td className="py-3 px-4 text-right">
                                 <span className="text-sm font-medium">{topic.promptCount}</span>
                               </td>
+                              {/* Reach, Rank, Focus, Sentiment 列暂时隐藏，后续版本会补上 */}
+                              {/* Reach, Rank, Focus, Sentiment columns temporarily hidden, will be added in future version */}
+                              {/* 
                               <td className="py-3 px-4 text-right">
                                 <span className="text-sm font-medium">{topic.mentionRate.toFixed(1)}%</span>
                               </td>
                               <td className="py-3 px-4 text-right">
-                                <span className="text-sm font-medium">{topic.rank || "--"}</span>
+                                <span className="text-sm font-medium">{topic.position || "--"}</span>
                               </td>
                               <td className="py-3 px-4 text-right">
                                 <span className="text-sm font-medium">{topic.visibility.toFixed(1)}%</span>
@@ -830,23 +897,24 @@ export default function IntentPage() {
                                     : "--"}
                                 </span>
                               </td>
+                              */}
                             </tr>
                             {isExpanded && (
                               <tr>
-                                <td colSpan={6} className="p-0 bg-muted/30">
+                                <td colSpan={2} className="p-0 bg-muted/30">
                                   <div className="p-4">
                                     <table className="w-full">
                                       <thead>
                                         <tr className="border-b border-border">
                                           <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground w-[20%]">
-                                            Core Query
+                                            {translate("Core Query", language)}
                                           </th>
                                           <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground w-[25%]">
-                                            AI Response
+                                            {translate("AI Response", language)}
                                           </th>
-                                          <th className="text-center py-2 px-3 text-xs font-medium text-muted-foreground w-[15%]">
+                                          <th className="text-center py-2 px-3 text-xs font-medium text-muted-foreground w-[12%]">
                                             <div className="flex items-center justify-center gap-2">
-                                              <span>Intent</span>
+                                              <span>{translate("Intent", language)}</span>
                                               <Tooltip>
                                                 <TooltipTrigger asChild>
                                                   <button className="text-muted-foreground hover:text-foreground transition-colors">
@@ -861,7 +929,22 @@ export default function IntentPage() {
                                           </th>
                                           <th className="text-center py-2 px-3 text-xs font-medium text-muted-foreground w-[10%]">
                                             <div className="flex items-center justify-center gap-2">
-                                              <span>Mentions</span>
+                                              <span>{translate("Mentioned", language)}</span>
+                                              <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                  <button className="text-muted-foreground hover:text-foreground transition-colors">
+                                                    <HelpCircle className="h-3 w-3" />
+                                                  </button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                  <p>{getTooltipContent("Mentioned（core query 表格）", language)}</p>
+                                                </TooltipContent>
+                                              </Tooltip>
+                                            </div>
+                                          </th>
+                                          <th className="text-center py-2 px-3 text-xs font-medium text-muted-foreground w-[10%]">
+                                            <div className="flex items-center justify-center gap-2">
+                                              <span>{translate("Mentions", language)}</span>
                                               <Tooltip>
                                                 <TooltipTrigger asChild>
                                                   <button className="text-muted-foreground hover:text-foreground transition-colors">
@@ -878,21 +961,21 @@ export default function IntentPage() {
                                             <div className="flex items-center justify-center gap-1">
                                               <button
                                                 onClick={() => {
-                                                  if (expandedTableSort.column === "rank" && expandedTableSort.order === "desc") {
-                                                    setExpandedTableSort({ column: "rank", order: "asc" })
+                                                  if (expandedTableSort.column === "position" && expandedTableSort.order === "desc") {
+                                                    setExpandedTableSort({ column: "position", order: "asc" })
                                                   } else {
-                                                    setExpandedTableSort({ column: "rank", order: "desc" })
+                                                    setExpandedTableSort({ column: "position", order: "desc" })
                                                   }
                                                 }}
                                                 className="flex items-center justify-center gap-1 hover:text-foreground transition-colors group"
                                               >
-                                              <span>Rank</span>
+                                              <span>{translate("Position", language)}</span>
                                                 <div className="flex flex-col">
                                                   <ChevronUp 
-                                                    className={`h-3 w-3 transition-colors ${expandedTableSort.column === "rank" && expandedTableSort.order === "desc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
+                                                    className={`h-3 w-3 transition-colors ${expandedTableSort.column === "position" && expandedTableSort.order === "desc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
                                                   />
                                                   <ChevronDown 
-                                                    className={`h-3 w-3 -mt-1 transition-colors ${expandedTableSort.column === "rank" && expandedTableSort.order === "asc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
+                                                    className={`h-3 w-3 -mt-1 transition-colors ${expandedTableSort.column === "position" && expandedTableSort.order === "asc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
                                                   />
                                                 </div>
                                               </button>
@@ -903,7 +986,7 @@ export default function IntentPage() {
                                                   </button>
                                                 </TooltipTrigger>
                                                 <TooltipContent>
-                                                  <p>{getTooltipContent("Rank（core query 表格）", language)}</p>
+                                                  <p>{getTooltipContent("Position（core query 表格）", language)}</p>
                                                 </TooltipContent>
                                               </Tooltip>
                                             </div>
@@ -920,7 +1003,7 @@ export default function IntentPage() {
                                                 }}
                                                 className="flex items-center justify-center gap-1 hover:text-foreground transition-colors group"
                                               >
-                                              <span>Focus</span>
+                                              <span>{translate("Focus", language)}</span>
                                                 <div className="flex flex-col">
                                                   <ChevronUp 
                                                     className={`h-3 w-3 transition-colors ${expandedTableSort.column === "focus" && expandedTableSort.order === "desc" ? "text-foreground" : "text-muted-foreground/30 group-hover:text-muted-foreground/60"}`} 
@@ -942,9 +1025,9 @@ export default function IntentPage() {
                                               </Tooltip>
                                             </div>
                                           </th>
-                                          <th className="text-center py-2 px-3 text-xs font-medium text-muted-foreground w-[10%]">
-                                            <div className="flex items-center justify-center gap-2">
-                                              <span>Citation</span>
+                                          <th className="text-center py-2 px-3 text-xs font-medium text-muted-foreground w-[13%]">
+                                            <div className="flex items-center justify-center gap-2 whitespace-nowrap">
+                                              <span>{translate("Citation", language)}</span>
                                               <Tooltip>
                                                 <TooltipTrigger asChild>
                                                   <button className="text-muted-foreground hover:text-foreground transition-colors">
@@ -962,12 +1045,21 @@ export default function IntentPage() {
                                       <tbody>
                                         {[...topic.prompts]
                                           .sort((a, b) => {
-                                            if (expandedTableSort.column === "rank") {
-                                              const aRank = a.rank ?? 999
-                                              const bRank = b.rank ?? 999
+                                            if (expandedTableSort.column === "position") {
+                                              // 基于 prompt.id 生成稳定的随机值 1-5
+                                              const getRandomPosition = (id: string) => {
+                                                let hash = 0
+                                                for (let i = 0; i < id.length; i++) {
+                                                  hash = ((hash << 5) - hash) + id.charCodeAt(i)
+                                                  hash = hash & hash // Convert to 32bit integer
+                                                }
+                                                return Math.abs(hash) % 5 + 1 // 1-5
+                                              }
+                                              const aPosition = getRandomPosition(a.id)
+                                              const bPosition = getRandomPosition(b.id)
                                               return expandedTableSort.order === "asc" 
-                                                ? aRank - bRank 
-                                                : bRank - aRank
+                                                ? aPosition - bPosition 
+                                                : bPosition - aPosition
                                             } else if (expandedTableSort.column === "focus") {
                                               const aFocus = a.focus ?? 0
                                               const bFocus = b.focus ?? 0
@@ -977,49 +1069,108 @@ export default function IntentPage() {
                                             }
                                             return 0
                                           })
-                                          .map((prompt) => (
-                                          <tr
-                                            key={prompt.id}
-                                            className="border-b border-border/50 hover:bg-background/50 transition-colors"
-                                          >
-                                            <td className="py-2 px-3">
-                                              <span className="text-xs">{prompt.text}</span>
-                                            </td>
-                                            <td className="py-2 px-3">
-                                              <span className="text-xs text-muted-foreground">
-                                                {prompt.aiResponse || "--"}
-                                              </span>
-                                            </td>
-                                            <td className="py-2 px-3 text-center">
-                                              <div className="flex items-center justify-center gap-2">
-                                                {getIntentIcon(prompt.intent)}
-                                                <span className={`text-xs ${getIntentColor(prompt.intent)} px-2 py-0.5 rounded`}>
-                                                  {translate(prompt.intent || topic.intent || "Other", language)}
-                                                </span>
-                                              </div>
-                                            </td>
-                                            <td className="py-2 px-3 text-center">
-                                              <span className="text-xs font-medium">
-                                                {prompt.mentions !== undefined ? prompt.mentions : "--"}
-                                              </span>
-                                            </td>
-                                            <td className="py-2 px-3 text-center">
-                                              <span className="text-xs font-medium">
-                                                {prompt.rank !== undefined ? prompt.rank : "--"}
-                                              </span>
-                                            </td>
-                                            <td className="py-2 px-3 text-center">
-                                              <span className="text-xs font-medium">
-                                                {prompt.focus !== undefined ? `${prompt.focus.toFixed(1)}%` : "--"}
-                                              </span>
-                                            </td>
-                                            <td className="py-2 px-3 text-center">
-                                              <span className="text-xs font-medium">
-                                                {prompt.citation !== undefined ? prompt.citation : "--"}
-                                              </span>
-                                            </td>
-                                          </tr>
-                                        ))}
+                                          .map((prompt) => {
+                                            // 优先使用 prompt 自己的 intent，如果不存在则使用 "Other"，不使用 topic.intent
+                                            const promptIntent = prompt.intent || "Other"
+                                            const intentItem = intentDistribution.find(item => item.intentKey === promptIntent)
+                                            const intentColor = intentItem?.color || "#6b7280"
+                                            
+                                            // 基于 prompt.id 生成稳定的随机值 1-5
+                                            const getRandomPosition = (id: string) => {
+                                              let hash = 0
+                                              for (let i = 0; i < id.length; i++) {
+                                                hash = ((hash << 5) - hash) + id.charCodeAt(i)
+                                                hash = hash & hash // Convert to 32bit integer
+                                              }
+                                              return Math.abs(hash) % 5 + 1 // 1-5
+                                            }
+                                            const randomPosition = getRandomPosition(prompt.id)
+                                            
+                                            return (
+                                              <tr
+                                                key={prompt.id}
+                                                className="border-b border-border/50 hover:bg-background/50 transition-colors"
+                                              >
+                                                <td className="py-2 px-3">
+                                                  <span className="text-xs">{prompt.text}</span>
+                                                </td>
+                                                <td className="py-2 px-3">
+                                                  {(() => {
+                                                    const response = prompt.aiResponse || "--"
+                                                    const maxLength = 100
+                                                    const isLong = response.length > maxLength
+                                                    const truncated = isLong ? response.slice(0, maxLength) : response
+                                                    
+                                                    return (
+                                                      <div className="flex items-start gap-2">
+                                                        <span className="text-xs text-muted-foreground flex-1">
+                                                          {truncated}
+                                                          {isLong && "..."}
+                                                        </span>
+                                                        {isLong && (
+                                                          <button
+                                                            onClick={() => {
+                                                              setSelectedAiResponse({
+                                                                text: prompt.text,
+                                                                response: response,
+                                                              })
+                                                              setAiResponseDrawerOpen(true)
+                                                            }}
+                                                            className="text-xs text-brand-600 hover:text-brand-700 flex-shrink-0 mt-0.5"
+                                                            title={language === "zh-TW" ? "查看完整回答" : "View full response"}
+                                                          >
+                                                            <MoreHorizontal className="h-3.5 w-3.5" />
+                                                          </button>
+                                                        )}
+                                                      </div>
+                                                    )
+                                                  })()}
+                                                </td>
+                                                <td className="py-2 px-3 text-center">
+                                                  <div className="flex items-center justify-center gap-1.5">
+                                                    <span
+                                                      className="w-2 h-2 rounded-full flex-shrink-0"
+                                                      style={{ backgroundColor: intentColor }}
+                                                    />
+                                                    <span className={`text-xs ${getIntentColor(promptIntent)} px-2 py-0.5 rounded`}>
+                                                      {translate(promptIntent, language)}
+                                                    </span>
+                                                  </div>
+                                                </td>
+                                                <td className="py-2 px-3 text-center">
+                                                  <Badge
+                                                    className={`text-xs font-medium ${
+                                                      prompt.mentionsBrand
+                                                        ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                                                        : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                                                    }`}
+                                                  >
+                                                    {prompt.mentionsBrand ? (language === "zh-TW" ? "是" : "Yes") : (language === "zh-TW" ? "否" : "No")}
+                                                  </Badge>
+                                                </td>
+                                                <td className="py-2 px-3 text-center">
+                                                  <span className="text-xs font-medium">
+                                                    {prompt.mentions !== undefined ? prompt.mentions : "--"}
+                                                  </span>
+                                                </td>
+                                                <td className="py-2 px-3 text-center">
+                                                  <span className="text-xs font-medium">
+                                                    {randomPosition}
+                                                  </span>
+                                                </td>
+                                                <td className="py-2 px-3 text-center">
+                                                  <span className="text-xs font-medium">
+                                                    {prompt.focus !== undefined ? `${prompt.focus.toFixed(1)}%` : "--"}
+                                                  </span>
+                                                </td>
+                                                <td className="py-2 px-3 text-center">
+                                                  <span className="text-xs font-medium">
+                                                    {prompt.citation !== undefined ? prompt.citation : "--"}
+                                                  </span>
+                                                </td>
+                                              </tr>
+                                            )
+                                          })}
                                       </tbody>
                                     </table>
                                   </div>
@@ -1039,6 +1190,41 @@ export default function IntentPage() {
           </div>
         </div>
       </div>
+
+      {/* AI Response Drawer */}
+      <Sheet open={aiResponseDrawerOpen} onOpenChange={setAiResponseDrawerOpen}>
+        <SheetContent side="right" className="w-full sm:w-[540px] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>
+              {translate("AI Response", language)}
+            </SheetTitle>
+            <SheetDescription>
+              {selectedAiResponse && (
+                <div className="mt-4">
+                  <p className="text-sm font-medium text-ink-900 mb-2">
+                    {translate("Core Query", language)}:
+                  </p>
+                  <p className="text-sm text-ink-700 mb-6">
+                    {selectedAiResponse.text}
+                  </p>
+                </div>
+              )}
+            </SheetDescription>
+          </SheetHeader>
+          {selectedAiResponse && (
+            <div className="mt-6">
+              <p className="text-sm font-medium text-ink-900 mb-3">
+                {translate("AI Response", language)}:
+              </p>
+              <div className="rounded-lg border border-ink-200 bg-ink-50 p-4">
+                <p className="text-sm text-ink-700 whitespace-pre-wrap leading-relaxed">
+                  {selectedAiResponse.response}
+                </p>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </TooltipProvider>
   )
 }

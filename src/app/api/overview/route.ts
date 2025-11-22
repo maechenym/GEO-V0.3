@@ -19,7 +19,7 @@ const MODEL_KEY_MAP: Record<string, string> = {
   claude: "claude",
 }
 
-const SELF_BRAND_CANDIDATES = ["英业达", "Inventec"]
+const SELF_BRAND_CANDIDATES = ["中国信托", "中國信託", "CTBC", "ctbc", "英业达", "Inventec"]
 
 const getModelKey = (modelParam: string | null): string => {
   if (!modelParam) return "overall"
@@ -27,16 +27,53 @@ const getModelKey = (modelParam: string | null): string => {
   return MODEL_KEY_MAP[normalized] || "overall"
 }
 
-const resolveSelfBrandKey = (source: any): string => {
+const resolveSelfBrandKey = (source: any, productKey?: string): string => {
   if (!source || typeof source !== "object") {
     return SELF_BRAND_CANDIDATES[0]
   }
+  
   const mentionRateKeys = Object.keys(source.mention_rate || {})
+  
+  // 如果提供了产品键名，尝试从产品键名中提取品牌名称
+  if (productKey) {
+    let brandFromKey = ""
+    if (productKey.includes("|")) {
+      brandFromKey = productKey.split("|")[0].trim()
+    } else if (productKey.includes("_")) {
+      // 格式: "中国信托_ctbc_财富管理与投资服务"
+      brandFromKey = productKey.split("_")[0].trim()
+    } else {
+      brandFromKey = productKey
+    }
+    
+    // 先尝试精确匹配
+    if (mentionRateKeys.includes(brandFromKey)) {
+      return brandFromKey
+    }
+    
+    // 尝试模糊匹配
+    const matchingKey = mentionRateKeys.find(key => 
+      key.toLowerCase().includes(brandFromKey.toLowerCase()) || 
+      brandFromKey.toLowerCase().includes(key.toLowerCase())
+    )
+    if (matchingKey) {
+      return matchingKey
+    }
+  }
+  
+  // 使用默认候选列表
   for (const candidate of SELF_BRAND_CANDIDATES) {
     if (mentionRateKeys.includes(candidate)) {
       return candidate
     }
   }
+  
+  // 如果仍然没有找到，返回第一个品牌（作为后备）
+  if (mentionRateKeys.length > 0) {
+    console.warn(`[Overview API] Could not find self brand in candidates, using first brand: ${mentionRateKeys[0]}`)
+    return mentionRateKeys[0]
+  }
+  
   return SELF_BRAND_CANDIDATES[0]
 }
 
@@ -208,8 +245,8 @@ const translateData = (data: any, language: string): any => {
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
-    const startDate = searchParams.get("startDate") || "2025-11-08"
-    const endDate = searchParams.get("endDate") || "2025-11-14"
+    const startDate = searchParams.get("startDate") || "2025-11-13"
+    const endDate = searchParams.get("endDate") || "2025-11-20"
     const productId = searchParams.get("productId")
     const brandId = searchParams.get("brandId")
     const modelParam = searchParams.get("model")
@@ -236,8 +273,10 @@ export async function GET(request: Request) {
     const allData = JSON.parse(fileContents)
     
     // 确定要使用的产品名称
-    // 新格式: "品牌名 (英文名) | 产品名"
-    let productName = "英业达 (Inventec) | 笔记本电脑代工" // 默认产品
+    // 新格式: "品牌名 (英文名) | 产品名" 或 "品牌名_ctbc_产品名"
+    // 默认使用数据文件中的第一个产品
+    const availableProducts = Object.keys(allData)
+    let productName = availableProducts.length > 0 ? availableProducts[0] : "中国信托_ctbc_财富管理与投资服务" // 默认产品
     
     // 如果提供了productId，尝试从产品数据中获取产品名称
     if (productId) {
@@ -258,16 +297,49 @@ export async function GET(request: Request) {
             const productNameFromAPI = productData.product.name
             const brandName = productData.product.brand?.name || "英业达 (Inventec)"
             
-            // 构建新格式的键名: "品牌名 | 产品名"
+            // 构建新格式的键名: "品牌名 | 产品名" 或 "品牌名_ctbc_产品名"
             if (productNameFromAPI.includes("|")) {
               // 如果已经包含 |，直接使用
               productName = productNameFromAPI
+            } else if (productNameFromAPI.includes("_")) {
+              // 如果包含下划线（如 "中国信托_ctbc_财富管理与投资服务"），先检查是否存在
+              if (allData[productNameFromAPI]) {
+                productName = productNameFromAPI
+              } else {
+                // 尝试模糊匹配
+                const matchingKey = Object.keys(allData).find(key => 
+                  key.includes(productNameFromAPI) || productNameFromAPI.includes(key)
+                )
+                productName = matchingKey || productNameFromAPI
+              }
             } else if (productNameFromAPI.includes(brandName)) {
-              // 如果包含品牌名，替换空格为 |
-              productName = productNameFromAPI.replace(/\s+/, " | ")
+              // 如果包含品牌名，尝试两种格式
+              const withPipe = productNameFromAPI.replace(/\s+/, " | ")
+              const withUnderscore = productNameFromAPI.replace(/\s+/g, "_")
+              
+              // 先检查数据文件中是否存在
+              if (allData[withPipe]) {
+                productName = withPipe
+              } else if (allData[withUnderscore]) {
+                productName = withUnderscore
+              } else {
+                productName = withPipe
+              }
             } else {
-              // 如果只有产品名，添加品牌名
-              productName = `${brandName} | ${productNameFromAPI}`
+              // 如果只有产品名，尝试两种格式
+              const withPipe = `${brandName} | ${productNameFromAPI}`
+              const brandNameUnderscore = brandName.replace(/\s+/g, "_").replace(/[()]/g, "")
+              const productNameUnderscore = productNameFromAPI.replace(/\s+/g, "_")
+              const withUnderscore = `${brandNameUnderscore}_${productNameUnderscore}`
+              
+              // 先检查数据文件中是否存在
+              if (allData[withPipe]) {
+                productName = withPipe
+              } else if (allData[withUnderscore]) {
+                productName = withUnderscore
+              } else {
+                productName = withPipe
+              }
             }
             
             console.log(`[Overview API] Using product: ${productName} for productId: ${productId}`)
@@ -284,24 +356,47 @@ export async function GET(request: Request) {
     // 如果直接匹配失败，尝试查找包含该产品名的键
     let productData = allData[productName]
     
-    if (!productData && productName.includes("|")) {
-      // 尝试模糊匹配：查找包含品牌和产品名的键
-      const [brandPart, productPart] = productName.split("|").map(s => s.trim())
-      const matchingKey = Object.keys(allData).find(key => {
-        return key.includes(brandPart) && key.includes(productPart)
-      })
-      if (matchingKey) {
-        productName = matchingKey
-        productData = allData[matchingKey]
-        console.log(`[Overview API] Found matching product key: ${matchingKey}`)
+    if (!productData) {
+      const availableKeys = Object.keys(allData)
+      console.log(`[Overview API] Direct match failed for: ${productName}`)
+      console.log(`[Overview API] Available product keys:`, availableKeys)
+      
+      if (productName.includes("|")) {
+        // 尝试模糊匹配：查找包含品牌和产品名的键
+        const [brandPart, productPart] = productName.split("|").map(s => s.trim())
+        const matchingKey = availableKeys.find(key => {
+          return key.includes(brandPart) && key.includes(productPart)
+        })
+        if (matchingKey) {
+          productName = matchingKey
+          productData = allData[matchingKey]
+          console.log(`[Overview API] Found matching product key (| format): ${matchingKey}`)
+        }
+      } else if (productName.includes("_")) {
+        // 格式: "品牌名_产品名" (如 "中国信托_ctbc_财富管理与投资服务")
+        const matchingKey = availableKeys.find(key => {
+          return key.includes(productName) || productName.includes(key)
+        })
+        if (matchingKey) {
+          productName = matchingKey
+          productData = allData[matchingKey]
+          console.log(`[Overview API] Found matching product key (_ format): ${matchingKey}`)
+        }
+      }
+      
+      // 如果仍然没有找到，使用第一个可用的产品（作为后备）
+      if (!productData && availableKeys.length > 0) {
+        productName = availableKeys[0]
+        productData = allData[productName]
+        console.log(`[Overview API] Using first available product as fallback: ${productName}`)
       }
     }
 
     if (!productData || productData.length === 0) {
       console.error(`[Overview API] Product data not found: ${productName}`)
-      console.log(`[Overview API] Available products:`, Object.keys(allData).slice(0, 10))
+      console.log(`[Overview API] Available products:`, Object.keys(allData))
       return NextResponse.json(
-        { error: `Product data not found: ${productName}` },
+        { error: `Product data not found: ${productName}. Available products: ${Object.keys(allData).join(", ")}` },
         { status: 404 }
       )
     }
@@ -359,9 +454,10 @@ export async function GET(request: Request) {
           { status: 500 }
         )
       }
-      selfBrandKey = resolveSelfBrandKey(overall)
+      selfBrandKey = resolveSelfBrandKey(overall, productName)
+      console.log(`[Overview API] 1day mode - Resolved self brand key: "${selfBrandKey}" from product: "${productName}"`)
       
-      // Reach: 英业达的mention_rate（转换为百分比）
+      // Reach: 目标品牌的mention_rate（转换为百分比）
       const inventecMentionRate = overall.mention_rate?.[selfBrandKey] || 0
       reach = inventecMentionRate * 100
 
@@ -409,7 +505,8 @@ export async function GET(request: Request) {
         )
       }
       
-      selfBrandKey = resolveSelfBrandKey(overall)
+      selfBrandKey = resolveSelfBrandKey(overall, productName)
+      console.log(`[Overview API] Multi-day mode - Resolved self brand key: "${selfBrandKey}" from product: "${productName}"`)
 
       filteredData.forEach(([date, data]: [string, any]) => {
         const dayOverall = getModelData(data, modelKey)
@@ -594,59 +691,12 @@ export async function GET(request: Request) {
       }
     }
     
-    // 计算delta（如果找到上一周期数据）
-    let reachDelta = 0
-    let rankDelta = 0
-    let focusDelta = 0
-    let sentimentDelta = 0
-    let visibilityDelta = 0
-    
-    if (previousPeriodData) {
-      // Reach: 如果有多天模式的平均值，使用平均值；否则使用英业达的mention_rate
-      let previousReach: number = 0
-      if (previousPeriodAverageReach !== null) {
-        previousReach = previousPeriodAverageReach
-      } else {
-        previousReach = (previousPeriodData.mention_rate?.[selfBrandKey] || 0) * 100
-      }
-      reachDelta = reach - previousReach
-
-      // Rank: 使用上一周期的平均值（如果有），否则使用最后一天的值
-      let previousRank: number = 1
-      
-      if (previousPeriodAverageRank !== null) {
-        previousRank = previousPeriodAverageRank
-      } else if (previousPeriodData && previousPeriodData.absolute_rank?.[selfBrandKey] !== undefined && previousPeriodData.absolute_rank?.[selfBrandKey] !== null) {
-        const absoluteRankRaw = previousPeriodData.absolute_rank[selfBrandKey]
-        
-        if (typeof absoluteRankRaw === 'string') {
-          const match = absoluteRankRaw.match(/^([\d.]+)/)
-          if (match) {
-            previousRank = parseFloat(match[1]) || 1
-          }
-        } else if (typeof absoluteRankRaw === 'number') {
-          previousRank = absoluteRankRaw
-        }
-      }
-      
-      // Rank delta: 对于1day模式，显示排名变化（绝对名次）
-      if (isOneDayRange) {
-        // 计算排名变化：previousRank - currentRank（如果是上升，delta为正）
-        rankDelta = previousRank - inventecRank
-      } else {
-        // 多天模式：显示得分变化（百分比）
-        rankDelta = inventecRank - previousRank
-      }
-
-      const previousFocus = (previousPeriodData.content_share?.[selfBrandKey] || 0) * 100
-      focusDelta = inventecFocus - previousFocus
-
-      const previousSentiment = previousPeriodData.sentiment_score?.[selfBrandKey] || 0
-      sentimentDelta = inventecSentiment - previousSentiment
-
-      const previousVisibility = (previousPeriodData.combined_score?.[selfBrandKey] || 0) * 100
-      visibilityDelta = inventecVisibility - previousVisibility
-    }
+    // 因为没有前七天的数据，所有delta都设为0
+    const reachDelta = 0
+    const rankDelta = 0
+    const focusDelta = 0
+    const sentimentDelta = 0
+    const visibilityDelta = 0
 
     const kpis: OverviewKPI[] = [
       {
@@ -706,7 +756,10 @@ export async function GET(request: Request) {
       competitorScoresMap = overall.total_score as Record<string, number>
     } else {
       // 多天范围：计算每个竞品的平均total_score
+      // 只使用所有天都存在的品牌（或者使用第一天的品牌列表）
       const competitorScoresAccumulator: Record<string, number[]> = {}
+      const brandDayCount: Record<string, number> = {}
+      const totalDays = filteredData.length
       
       filteredData.forEach(([date, data]: [string, any]) => {
         const dayOverall = getModelData(data, modelKey)
@@ -715,21 +768,69 @@ export async function GET(request: Request) {
         Object.entries(dayOverall.total_score).forEach(([name, score]) => {
           if (!competitorScoresAccumulator[name]) {
             competitorScoresAccumulator[name] = []
+            brandDayCount[name] = 0
           }
           competitorScoresAccumulator[name].push(score as number)
+          brandDayCount[name] = (brandDayCount[name] || 0) + 1
         })
       })
       
-      // 计算平均值
+      // 使用所有天出现的所有品牌（不限制为第一天的品牌列表）
+      const allBrandsAcrossDays = new Set<string>()
+      filteredData.forEach(([date, data]: [string, any]) => {
+        const dayOverall = getModelData(data, modelKey)
+        if (dayOverall?.total_score) {
+          Object.keys(dayOverall.total_score).forEach(name => {
+            allBrandsAcrossDays.add(name)
+          })
+        }
+      })
+      
+      console.log(`[Overview API] Multi-day mode: total days: ${totalDays}, all brands across all days: ${allBrandsAcrossDays.size}`)
+      
+      // 计算平均值，使用所有天出现的所有品牌
       Object.entries(competitorScoresAccumulator).forEach(([name, scores]) => {
+        // 使用所有天出现的所有品牌（不限制为第一天的品牌列表）
         competitorScoresMap[name] = scores.reduce((sum, s) => sum + s, 0) / scores.length
       })
+      
+      console.log(`[Overview API] Multi-day mode: competitorScoresMap has ${Object.keys(competitorScoresMap).length} unique brands (from ${Object.keys(competitorScoresAccumulator).length} total brands across all days)`)
+      if (Object.keys(competitorScoresMap).length > 50) {
+        console.warn(`[Overview API] ⚠ WARNING: Too many brands in competitorScoresMap (${Object.keys(competitorScoresMap).length}), expected around 28`)
+        console.log(`[Overview API] First 10 brand names:`, Object.keys(competitorScoresMap).slice(0, 10))
+      }
     }
 
     // 排序所有品牌（包括英业达），按total_score降序
-    const sortedCompetitors = Object.entries(competitorScoresMap)
+    console.log(`[Overview API] Building competitors list, selfBrandKey: "${selfBrandKey}", total brands in competitorScoresMap: ${Object.keys(competitorScoresMap).length}`)
+    
+    // 去重：确保competitorScoresMap中没有重复的品牌名称
+    const uniqueCompetitorScoresMap: Record<string, number> = {}
+    Object.entries(competitorScoresMap).forEach(([name, score]) => {
+      if (uniqueCompetitorScoresMap[name] !== undefined) {
+        console.warn(`[Overview API] Duplicate brand name in competitorScoresMap: "${name}", keeping first occurrence`)
+      } else {
+        uniqueCompetitorScoresMap[name] = score
+      }
+    })
+    
+    console.log(`[Overview API] After deduplication, unique brands: ${Object.keys(uniqueCompetitorScoresMap).length}`)
+    
+    const sortedCompetitors = Object.entries(uniqueCompetitorScoresMap)
       .map(([name, score]) => ({ name, score }))
       .sort((a, b) => b.score - a.score)
+    console.log(`[Overview API] Sorted competitors (first 5):`, sortedCompetitors.slice(0, 5).map(c => ({ name: c.name, score: c.score })))
+    const selfBrandInCompetitors = sortedCompetitors.find(c => c.name === selfBrandKey)
+    console.log(`[Overview API] Self brand "${selfBrandKey}" in competitors:`, selfBrandInCompetitors ? { name: selfBrandInCompetitors.name, score: selfBrandInCompetitors.score } : 'NOT FOUND')
+    
+    // 检查是否有包含"中国信托"的品牌
+    const ctbcBrands = sortedCompetitors.filter(c => c.name.includes('中国信托') || c.name.includes('中國信託') || c.name.includes('CTBC'))
+    if (ctbcBrands.length > 0) {
+      console.log(`[Overview API] Found brands containing "中国信托":`, ctbcBrands.map(c => ({ name: c.name, score: c.score })))
+    }
+    
+    // 列出所有品牌名称，用于调试
+    console.log(`[Overview API] All brand names in competitors:`, sortedCompetitors.map(c => c.name).slice(0, 10))
 
     // 获取上一周期的品牌分数（用于delta计算）
     let previousPeriodScores: Record<string, number> = {}
@@ -762,32 +863,8 @@ export async function GET(request: Request) {
     // 构建排名列表（包括所有品牌，按total_score排序）
     sortedCompetitors.forEach((comp, index) => {
       const currentScore = comp.score
-      const previousScore = previousPeriodScores[comp.name]
-      
-      let delta = 0
-      let rankDelta = 0
-      
-      if (isOneDayRange) {
-        // 1day模式：计算排名变化（绝对名次）
-        if (previousPeriodScores && Object.keys(previousPeriodScores).length > 0) {
-          // 计算上一周期的排名（包括所有品牌）
-          const previousCompetitors = Object.entries(previousPeriodScores)
-            .map(([name, score]) => ({ name, score: score as number }))
-            .sort((a, b) => b.score - a.score)
-          
-          const previousRankIndex = previousCompetitors.findIndex(c => c.name === comp.name)
-          const previousRank = previousRankIndex !== -1 ? previousRankIndex + 1 : sortedCompetitors.length + 1
-          const currentRank = index + 1
-          
-          rankDelta = previousRank - currentRank // 排名变化：上升为正，下降为负
-        }
-        delta = rankDelta
-      } else {
-        // 多天模式：计算得分变化（绝对值）
-        if (previousScore !== undefined) {
-          delta = currentScore - previousScore
-        }
-      }
+      // 因为没有前七天的数据，所有delta都设为0
+      const delta = 0
       
       // 品牌名显示逻辑：本品牌根据语言显示不同名称，其他品牌保持原样
       let displayName = comp.name
@@ -796,21 +873,31 @@ export async function GET(request: Request) {
         displayName = selfBrandKey
       }
       
+      const isSelf = comp.name === selfBrandKey
+      if (isSelf) {
+        console.log(`[Overview API] ✓ Marking brand "${comp.name}" as self brand (selfBrandKey: "${selfBrandKey}")`)
+      } else if (comp.name.includes('中国信托') || comp.name.includes('中國信託') || comp.name.includes('CTBC')) {
+        console.log(`[Overview API] ⚠ Brand "${comp.name}" contains "中国信托" but isSelf is false (selfBrandKey: "${selfBrandKey}")`)
+      }
+      
       competitors.push({
         rank: index + 1,
         name: displayName,
         score: parseFloat(currentScore.toFixed(1)), // 大数字显示1位小数
-        delta: isOneDayRange ? parseFloat(delta.toFixed(0)) : parseFloat(delta.toFixed(1)),
-        isSelf: comp.name === selfBrandKey,
+        delta: 0, // 没有前七天数据，delta设为0
+        isSelf: isSelf,
       })
     })
 
     // 构建品牌影响力趋势数据（为所有竞品）
     // 注意：后台11.6的数据代表收集到的是11.5的数据，所以日期要向前减一天
-    // 1day模式：显示最后两天（11.4和11.5），如果数据不足2天则显示所有可用数据
+    // 1day模式：显示最后两天，如果数据不足2天则显示所有可用数据
+    // 多天模式：显示所有filteredData
     const dataForTrend = isOneDayRange 
       ? filteredData.slice(-Math.min(2, filteredData.length)) 
-      : filteredData
+      : filteredData  // 多天模式：显示所有数据
+    
+    console.log(`[Overview API] Trend data selection - isOneDayRange: ${isOneDayRange}, filteredData.length: ${filteredData.length}, dataForTrend.length: ${dataForTrend.length}`)
     
     console.log(`[Overview API] isOneDayRange: ${isOneDayRange}, filteredData.length: ${filteredData.length}`)
     console.log(`[Overview API] dataForTrend dates:`, dataForTrend.map(([date]: [string, any]) => date))
@@ -910,8 +997,42 @@ export async function GET(request: Request) {
     const sources = computeTopSources(filteredData, modelKey, "overall", selfBrandKey, language)
     const topics = computeTopTopics(filteredData, modelKey, "overall", selfBrandKey)
 
-    // 根据语言参数翻译数据
-    const translatedRanking = competitors.map((item) => ({
+    // 根据语言参数翻译数据，并去重（确保没有重复的品牌）
+    // 使用原始名称（翻译前）进行去重，避免翻译后的名称重复
+    const seenOriginalNames = new Set<string>()
+    const uniqueCompetitors: CompetitorRanking[] = []
+    
+    competitors.forEach((item) => {
+      // 使用原始名称进行去重检查
+      if (seenOriginalNames.has(item.name)) {
+        console.warn(`[Overview API] Duplicate brand found in ranking: "${item.name}", skipping`)
+        return
+      }
+      seenOriginalNames.add(item.name)
+      uniqueCompetitors.push(item)
+    })
+    
+    console.log(`[Overview API] Total competitors before deduplication: ${competitors.length}, after: ${uniqueCompetitors.length}`)
+    if (competitors.length !== uniqueCompetitors.length) {
+      console.warn(`[Overview API] ⚠ Removed ${competitors.length - uniqueCompetitors.length} duplicate brands`)
+      // 列出所有重复的品牌名称
+      const nameCounts = new Map<string, number>()
+      competitors.forEach(item => {
+        nameCounts.set(item.name, (nameCounts.get(item.name) || 0) + 1)
+      })
+      const duplicates = Array.from(nameCounts.entries()).filter(([_, count]) => count > 1)
+      if (duplicates.length > 0) {
+        console.warn(`[Overview API] Duplicate brand names:`, duplicates)
+      }
+    }
+    
+    // 验证最终结果
+    if (uniqueCompetitors.length > 50) {
+      console.error(`[Overview API] ⚠ WARNING: Too many competitors (${uniqueCompetitors.length}), expected around 28`)
+      console.log(`[Overview API] First 10 competitor names:`, uniqueCompetitors.slice(0, 10).map(c => c.name))
+    }
+    
+    const translatedRanking = uniqueCompetitors.map((item) => ({
       ...item,
       name: language === "zh-TW" ? toTraditional(item.name) : item.name,
     }))
@@ -953,7 +1074,7 @@ export async function GET(request: Request) {
       },
     } as any
 
-    console.log(`[Overview API] Returning overview data with ${competitors.length} competitors`)
+    console.log(`[Overview API] Returning overview data with ${uniqueCompetitors.length} competitors (after deduplication from ${competitors.length})`)
 
     return NextResponse.json(overviewData)
   } catch (error: any) {

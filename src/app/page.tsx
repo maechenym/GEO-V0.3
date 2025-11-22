@@ -11,7 +11,7 @@ import { LandingHeader } from "@/components/landing-header"
  * 页面跳转逻辑：
  * - "Start Free Trial" 按钮 → /signup
  * - 已有账户 → /login
- * - Header 导航：Pricing, Docs, News
+ * - Header 导航：Pricing, Docs, Blog
  */
 export default function LandingPage() {
   return (

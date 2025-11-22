@@ -9,6 +9,8 @@ import { http, HttpResponse } from "msw"
  */
 
 // 模拟用户数据库（内存）
+// 只有 test1@example.com 可以进入产品预览，其他所有用户都是新用户
+// 实际使用时，所有用户数据都应该从后端获取
 const mockUsers: Record<
   string,
   {
@@ -23,11 +25,7 @@ const mockUsers: Record<
     }
   }
 > = {
-  "test@example.com": {
-    id: "u_1",
-    email: "test@example.com",
-    hasBrand: true,
-  },
+  // 只有 test1@example.com 可以进入产品预览（有品牌数据）
   "test1@example.com": {
     id: "u_test1",
     email: "test1@example.com",
@@ -39,22 +37,7 @@ const mockUsers: Record<
       trialEndsAt: null,
     },
   },
-  "test1@gmail.com": {
-    id: "u_test1_gmail",
-    email: "test1@gmail.com",
-    hasBrand: true, // Waitlist结束后，用户已有品牌
-    subscription: {
-      planId: undefined, // 还未选择订阅计划（等待期结束后的状态）
-      planName: undefined,
-      status: undefined,
-      trialEndsAt: null,
-    },
-  },
-  "new@example.com": {
-    id: "u_2",
-    email: "new@example.com",
-    hasBrand: false,
-  },
+  // 其他所有用户都是新用户（hasBrand: false），需要从后端获取数据
 }
 
 // 模拟团队成员数据库（内存）
@@ -152,7 +135,7 @@ function preInitializeTestAccount() {
     }
   })
 
-  console.log(`[MSW] Pre-initialized Inventec data for test@example.com`)
+  console.log(`[MSW] Pre-initialized Inventec data for test1@example.com`)
   console.log(`[MSW] - Brand: ${mockBrands[testEmail].name}`)
   console.log(`[MSW] - Products: ${mockProducts[testEmail].length}`)
   console.log(`[MSW] - Competitors: ${mockCompetitors[testEmail].length}`)
@@ -415,8 +398,9 @@ export const handlers = [
     const emailMatch = token.match(/mock_(?:login|signup|magic|google)_token_(.+)/)
     const email = emailMatch ? emailMatch[1] : token.includes("@") ? token : "test@example.com"
 
-    // 对于test@example.com或没有品牌的用户，自动初始化英业达品牌和所有产品
-    if (email === "test@example.com" || !mockBrands[email]) {
+      // 只有 test1@example.com 可以进入产品预览，自动初始化英业达品牌和所有产品
+    // 其他所有用户都是新用户，需要从后端获取数据
+    if (email === "test1@example.com" && !mockBrands[email]) {
       await initializeInventecBrand(email)
     }
 
@@ -427,7 +411,8 @@ export const handlers = [
       mockUsers[email] = {
         id: `u_${Date.now()}`,
         email,
-        hasBrand: mockBrands[email] ? true : false,
+        // 只有 test1@example.com 有品牌数据（产品预览）
+        hasBrand: email === "test1@example.com" && mockBrands[email] ? true : false,
       }
       const newUser = mockUsers[email]
       return HttpResponse.json({
@@ -1436,8 +1421,8 @@ export const handlers = [
     // Get all brands for this user (including Inventec)
     const brands = []
     
-    // 对于test@example.com，总是返回英业达品牌
-    if (email === "test@example.com") {
+    // 只有 test1@example.com 可以进入产品预览（有品牌数据）
+    if (email === "test1@example.com") {
       if (mockBrands[email] && mockBrands[email].id === INVENTEC_BRAND_ID) {
         brands.push(mockBrands[email])
       } else {
@@ -1493,12 +1478,12 @@ export const handlers = [
       }
     }
 
-    // 对于test@example.com，总是使用英业达品牌
-    if (email === "test@example.com") {
+    // 只有 test1@example.com 可以进入产品预览（有品牌数据）
+    if (email === "test1@example.com") {
       await initializeInventecBrand(email)
       // 确保返回英业达品牌，不管请求的ID是什么
       if (mockBrands[email]) {
-        console.log(`[MSW] Returning Inventec brand for test@example.com:`, mockBrands[email])
+        console.log(`[MSW] Returning Inventec brand for test1@example.com:`, mockBrands[email])
         await new Promise((resolve) => setTimeout(resolve, 200))
         return HttpResponse.json({
           brand: mockBrands[email],
@@ -1554,8 +1539,8 @@ export const handlers = [
 
     const body = await request.json() as any
 
-    // 对于test@example.com，不允许创建新品牌，总是返回英业达品牌
-    if (email === "test@example.com") {
+    // 只有 test1@example.com 可以进入产品预览（有品牌数据）
+    if (email === "test1@example.com") {
       await initializeInventecBrand(email)
       if (mockBrands[email]) {
         await new Promise((resolve) => setTimeout(resolve, 300))
@@ -1653,7 +1638,8 @@ export const handlers = [
     console.log(`[MSW] GET /api/brands/:brandId/products - email: ${email}, brandId: ${brandId}`)
 
     // 对于test@example.com，总是使用英业达品牌
-    const actualBrandId = email === "test@example.com" ? INVENTEC_BRAND_ID : brandId
+    // 只有 test1@example.com 可以进入产品预览（有品牌数据）
+    const actualBrandId = email === "test1@example.com" ? INVENTEC_BRAND_ID : brandId
 
     // 初始化英业达品牌和产品
     if (actualBrandId === INVENTEC_BRAND_ID || brandId === INVENTEC_BRAND_ID) {
@@ -1739,7 +1725,8 @@ export const handlers = [
     const { brandId } = params as { brandId: string }
 
     // 对于test@example.com，总是使用英业达品牌
-    const actualBrandId = email === "test@example.com" ? INVENTEC_BRAND_ID : brandId
+    // 只有 test1@example.com 可以进入产品预览（有品牌数据）
+    const actualBrandId = email === "test1@example.com" ? INVENTEC_BRAND_ID : brandId
 
     // 初始化英业达品牌
     if (actualBrandId === INVENTEC_BRAND_ID) {
@@ -1822,7 +1809,8 @@ export const handlers = [
     const { brandId } = params as { brandId: string }
 
     // 对于test@example.com，总是使用英业达品牌
-    const actualBrandId = email === "test@example.com" ? INVENTEC_BRAND_ID : brandId
+    // 只有 test1@example.com 可以进入产品预览（有品牌数据）
+    const actualBrandId = email === "test1@example.com" ? INVENTEC_BRAND_ID : brandId
 
     // 初始化英业达品牌
     if (actualBrandId === INVENTEC_BRAND_ID) {

@@ -9,7 +9,7 @@ export const PromptItemSchema = z.object({
   text: z.string(),
   platform: z.string(),
   role: z.string().optional(),
-  rank: z.number().optional(),
+  position: z.number().optional(),
   mentionsBrand: z.boolean(),
   sentiment: z.number().optional(), // -1 to 1
   aiResponse: z.string().optional(), // AI response content
@@ -29,7 +29,7 @@ export const TopicRowSchema = z.object({
   visibility: z.number(), // 0-100
   mentionRate: z.number(), // 0-100
   sentiment: z.number().optional(), // -1 to 1
-  rank: z.number().optional(),
+  position: z.number().optional(),
   prompts: z.array(PromptItemSchema),
 })
 
@@ -55,8 +55,8 @@ export interface IntentDistributionItem {
 
 export type SortKey = 
   | "topicHot" 
-  | "rankAsc" 
-  | "rankDesc" 
+  | "positionAsc" 
+  | "positionDesc" 
   | "reachAsc"
   | "reachDesc"
   | "focusAsc"

@@ -288,7 +288,7 @@ export default function SourcesPage() {
     <TooltipProvider>
       <div className="bg-background -mx-6">
         <PageHeaderFilterBar
-          title={language === "zh-TW" ? "來源分析" : "Source Analysis"}
+          title={language === "zh-TW" ? "來源" : "Source"}
           description={
             language === "zh-TW"
               ? "分析 AI 回答中的品牌提及頻率和來源分佈"
@@ -308,7 +308,7 @@ export default function SourcesPage() {
         />
 
         {/* Main Content */}
-        <div className="container mx-auto px-4 sm:px-pageX py-4 sm:py-pageY max-w-[1600px]">
+        <div className="container mx-auto px-4 sm:px-pageX py-3 sm:py-4 max-w-[1600px]">
           <div className="space-y-4 sm:space-y-6">
             {/* Top Source Table */}
             <FadeUp delay={0.12}>
@@ -355,10 +355,10 @@ export default function SourcesPage() {
                         </colgroup>
                         <thead>
                           <tr className="border-b border-ink-200 bg-ink-50/50">
-                            <th className="text-left py-3 px-4 text-xs font-semibold text-ink-700">
+                            <th className="text-left py-2.5 px-3 text-xs font-semibold text-ink-700">
                               Source
                             </th>
-                            <th className="text-left py-3 px-4 text-xs font-semibold text-ink-700">
+                            <th className="text-left py-2.5 px-3 text-xs font-semibold text-ink-700">
                               <div className="flex items-center gap-2">
                                 <span>Type</span>
                                 <Tooltip>
@@ -467,7 +467,7 @@ export default function SourcesPage() {
                                 key={source.id}
                                 className="border-b border-ink-100 hover:bg-ink-50 transition-colors"
                               >
-                                <td className="py-3 px-4 text-sm text-ink-900">
+                                <td className="py-2.5 px-3 text-sm text-ink-900">
                                   <div className="flex items-center gap-2">
                                     <span className="text-sm font-medium">{source.url}</span>
                                     <button
@@ -486,7 +486,7 @@ export default function SourcesPage() {
                                     </a>
                                   </div>
                                 </td>
-                                <td className="py-3 px-4 text-sm text-ink-900">
+                                <td className="py-2.5 px-3 text-sm text-ink-900">
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <Badge
@@ -502,12 +502,12 @@ export default function SourcesPage() {
                                     </TooltipContent>
                                   </Tooltip>
                                 </td>
-                                <td className="py-3 px-4 text-center">
+                                <td className="py-2.5 px-3 text-center">
                                   <span className="text-sm font-medium">
                                     {source.share.toFixed(1)}%
                                   </span>
                                 </td>
-                                <td className="py-3 px-4 text-center">
+                                <td className="py-2.5 px-3 text-center">
                                   <Badge
                                     className={`text-xs font-medium ${
                                       source.mentioned
@@ -518,23 +518,23 @@ export default function SourcesPage() {
                                     {source.mentioned ? "Yes" : "No"}
                                   </Badge>
                                 </td>
-                                <td className="py-3 px-4 text-right">
-                                  <div className="flex flex-col items-end gap-1">
+                                <td className="py-2.5 px-3 text-right">
+                                  <div className="flex items-center justify-end gap-2">
                                     {source.mentions.length > 0 ? (
                                       <>
-                                        <div className="text-sm font-medium">{firstMention}</div>
+                                        <span className="text-sm font-medium">{firstMention}</span>
                                         {remainingMentions.length > 0 && (
                                           <>
                                             {isExpanded ? (
-                                              <div className="flex flex-col items-end gap-1 mt-1">
+                                              <div className="flex flex-col items-end gap-1">
                                                 {remainingMentions.map((mention, idx) => (
-                                                  <div key={idx} className="text-sm text-muted-foreground">
+                                                  <span key={idx} className="text-sm text-muted-foreground">
                                                     {mention}
-                                                  </div>
+                                                  </span>
                                                 ))}
                                                 <button
                                                   onClick={() => toggleMentionsExpansion(source.id)}
-                                                  className="text-xs text-ink-500 hover:text-ink-700 transition-colors flex items-center gap-1 mt-1"
+                                                  className="text-xs text-ink-500 hover:text-ink-700 transition-colors flex items-center gap-1"
                                                 >
                                                   <ChevronUp className="h-3 w-3" />
                                                   Less
@@ -565,7 +565,7 @@ export default function SourcesPage() {
 
                       {/* Pagination Controls */}
                       {totalPages > 1 && (
-                        <div className="mt-4 pt-4 border-t border-border">
+                        <div className="mt-3 pt-3 border-t border-ink-200">
                           <div className="flex items-center justify-center">
                             <div className="flex items-center gap-2">
                               <Button
@@ -573,31 +573,21 @@ export default function SourcesPage() {
                                 size="sm"
                                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                                 disabled={currentPage === 1}
-                                className="h-8 w-8 p-0"
+                                className="h-7 w-7 p-0 border-ink-200 disabled:opacity-50"
                               >
-                                <ChevronLeft className="h-4 w-4" />
+                                <ChevronLeft className="h-3.5 w-3.5" />
                               </Button>
-                              <div className="flex items-center gap-1">
-                                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                                  <Button
-                                    key={page}
-                                    variant={currentPage === page ? "default" : "outline"}
-                                    size="sm"
-                                    onClick={() => setCurrentPage(page)}
-                                    className="h-8 w-8 p-0 text-xs"
-                                  >
-                                    {page}
-                                  </Button>
-                                ))}
+                              <div className="flex items-center gap-2 px-3 text-sm text-gray-700">
+                                <span>{currentPage} / {totalPages}</span>
                               </div>
                               <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                                 disabled={currentPage === totalPages}
-                                className="h-8 w-8 p-0"
+                                className="h-7 w-7 p-0 border-ink-200 disabled:opacity-50"
                               >
-                                <ChevronRight className="h-4 w-4" />
+                                <ChevronRight className="h-3.5 w-3.5" />
                               </Button>
                             </div>
                           </div>
@@ -609,6 +599,9 @@ export default function SourcesPage() {
               </Card>
             </FadeUp>
 
+            {/* 不同來源類別的佔比情況功能暂时隐藏，后续版本会补上 */}
+            {/* Sources Distribution feature temporarily hidden, will be added in future version */}
+            {/* 
             {!loading && !error && topSourceDistribution.length > 0 && (
               <FadeUp delay={0.18}>
                 <Card className="rounded-2xl shadow-sm">
@@ -691,6 +684,7 @@ export default function SourcesPage() {
                 </Card>
               </FadeUp>
             )}
+            */}
           </div>
         </div>
       </div>

@@ -5,7 +5,7 @@ import { format, subDays } from "date-fns"
 import type { IntentKpis, TopicRow, PromptItem } from "@/types/intent"
 import { mockIntentKpis, mockTopicRows } from "@/mocks/intent"
 
-const SELF_BRAND_CANDIDATES = ["英业达", "Inventec"]
+const SELF_BRAND_CANDIDATES = ["中国信托", "中國信託", "CTBC", "ctbc", "英业达", "Inventec"]
 
 const MODEL_KEY_MAP: Record<string, string> = {
   all: "overall",
@@ -66,6 +66,23 @@ const inferIntent = (text: string): "Information" | "Advice" | "Evaluation" | "C
   if (!text || typeof text !== "string") return "Other"
   
   const normalized = text.toLowerCase().trim()
+  
+  // 0. 特殊处理：为特定的 supply chain 相关 query 分配不同的 intent
+  // 这样可以确保同一主题下的不同 query 显示不同的 intent
+  const supplyChainIntentMap: Array<{ pattern: RegExp; intent: "Information" | "Advice" | "Evaluation" | "Comparison" | "Other" }> = [
+    { pattern: /^stringent supply chain security measures$/i, intent: "Evaluation" },
+    { pattern: /^commitment to supply chain security$/i, intent: "Information" },
+    { pattern: /^comprehensive approach to supply chain management$/i, intent: "Advice" },
+    { pattern: /^intel transparent supply chain\s*\(intel\s+tsc?\)\s*solution$/i, intent: "Information" },
+    { pattern: /^intel transparent supply chain solution$/i, intent: "Comparison" },
+  ]
+  
+  // 检查是否有匹配的 pattern
+  for (const { pattern, intent } of supplyChainIntentMap) {
+    if (pattern.test(normalized)) {
+      return intent
+    }
+  }
   
   // 1. Comparison: 比较类查询（最具体，优先检查）
   const comparisonKeywords = [
@@ -251,7 +268,7 @@ export async function GET(request: Request) {
     const topicMap = new Map<string, {
       queries: Array<{ prompt: string; answer: string; intent: string; date: string }>
       reach: number[]
-      rank: number[]
+      position: number[]
       focus: number[]
       sentiment: number[]
       mentions: number[]
@@ -262,7 +279,7 @@ export async function GET(request: Request) {
       topicMap.set(topic, {
         queries: [],
         reach: [],
-        rank: [],
+        position: [],
         focus: [],
         sentiment: [],
         mentions: [],
@@ -307,9 +324,9 @@ export async function GET(request: Request) {
               const selfBrandKey = SELF_BRAND_CANDIDATES.find(b => mentionRate[b] !== undefined) || SELF_BRAND_CANDIDATES[0]
               topicData.reach.push(mentionRate[selfBrandKey] || 0)
               
-              // 从absolute_rank获取rank
+              // 从absolute_rank获取position
               const absoluteRank = dayModelData.absolute_rank || {}
-              topicData.rank.push(typeof absoluteRank[selfBrandKey] === "number" ? absoluteRank[selfBrandKey] : 999)
+              topicData.position.push(typeof absoluteRank[selfBrandKey] === "number" ? absoluteRank[selfBrandKey] : 999)
               
               // 从content_share获取focus
               const contentShare = dayModelData.content_share || {}
@@ -362,7 +379,7 @@ export async function GET(request: Request) {
             })
             
             topicData.reach.push(mentionRate[brandName] || 0)
-            topicData.rank.push(typeof absoluteRank[brandName] === "number" ? absoluteRank[brandName] : 999)
+            topicData.position.push(typeof absoluteRank[brandName] === "number" ? absoluteRank[brandName] : 999)
             topicData.focus.push(contentShare[brandName] || 0)
             topicData.sentiment.push(sentimentScore[brandName] || 0.5)
             topicData.mentions.push(Object.keys(mentionRate).length)
@@ -388,7 +405,7 @@ export async function GET(request: Request) {
           visibility: 0,
           mentionRate: 0,
           sentiment: 0.5,
-          rank: 999,
+          position: 999,
           prompts: [],
         })
         return
@@ -398,8 +415,8 @@ export async function GET(request: Request) {
       const avgReach = topicData.reach.length > 0 
         ? topicData.reach.reduce((sum, r) => sum + r, 0) / topicData.reach.length 
         : 0
-      const avgRank = topicData.rank.length > 0
-        ? topicData.rank.reduce((sum, r) => sum + r, 0) / topicData.rank.length
+      const avgPosition = topicData.position.length > 0
+        ? topicData.position.reduce((sum, r) => sum + r, 0) / topicData.position.length
         : 999
       const avgFocus = topicData.focus.length > 0
         ? topicData.focus.reduce((sum, f) => sum + f, 0) / topicData.focus.length
@@ -417,7 +434,7 @@ export async function GET(request: Request) {
         text: q.prompt,
         platform: modelKey === "chatgpt" ? "ChatGPT" : modelKey === "gemini" ? "Gemini" : modelKey === "claude" ? "Claude" : "All Models",
         role: "User",
-        rank: avgRank,
+        position: avgPosition,
         mentionsBrand: SELF_BRAND_CANDIDATES.some(b => q.answer.includes(b)),
         sentiment: avgSentiment,
         aiResponse: q.answer,
@@ -443,7 +460,7 @@ export async function GET(request: Request) {
         visibility: avgReach * 100, // 转换为百分比
         mentionRate: avgReach * 100,
         sentiment: avgSentiment,
-        rank: Math.round(avgRank),
+        position: Math.round(avgPosition),
         prompts,
       })
       
@@ -484,7 +501,7 @@ export async function GET(request: Request) {
       topicCount: validTopicRows.length,
       promptCount: totalQueries,
       compositeRank: validTopicRows.length > 0 
-        ? Math.round(validTopicRows.reduce((sum, t) => sum + (t.rank || 999), 0) / validTopicRows.length)
+        ? Math.round(validTopicRows.reduce((sum, t) => sum + (t.position || 999), 0) / validTopicRows.length)
         : 0,
       avgVisibility: validTopicRows.length > 0
         ? validTopicRows.reduce((sum, t) => sum + t.visibility, 0) / validTopicRows.length

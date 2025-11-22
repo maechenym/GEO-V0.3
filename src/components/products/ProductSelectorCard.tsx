@@ -14,6 +14,31 @@ import { useProducts } from "@/hooks/use-products"
 import { translate } from "@/lib/i18n"
 import type { Product } from "@/types/products"
 
+// 从产品名称中移除品牌名称
+const sanitizeProductName = (name: string) => {
+  if (!name) return ""
+  const trimmed = name.trim()
+
+  if (trimmed.includes("|")) {
+    const parts = trimmed.split("|").map((part) => part.trim())
+    return parts[parts.length - 1] || trimmed
+  }
+
+  if (trimmed.includes("-")) {
+    const parts = trimmed.split("-").map((part) => part.trim())
+    if (parts.length > 1) {
+      return parts[parts.length - 1]
+    }
+  }
+
+  const withoutBrand = trimmed.replace(/^英业达\s*\(Inventec\)\s*/i, "").trim()
+  if (withoutBrand && withoutBrand !== trimmed) {
+    return withoutBrand
+  }
+
+  return trimmed
+}
+
 interface ProductSelectorCardProps {
   brandId: string
 }
@@ -38,14 +63,18 @@ export function ProductSelectorCard({ brandId }: ProductSelectorCardProps) {
   // 使用本地状态来确保默认值被设置
   const [initialized, setInitialized] = useState(false)
 
-  // 如果没有选中产品且数据已加载，优先使用上一次保存的产品，否则默认选择机架解决方案
+  // 进入页面时，优先使用已保存的产品ID（savedProductId），这样显示的是用户当前查看的产品
+  // 如果没有保存的产品，则使用默认产品
   useEffect(() => {
     if (!isLoading && activeProducts.length > 0 && !initialized) {
+      // 优先使用已保存的产品ID（savedProductId）
       if (savedProductId && activeProducts.some((p: Product) => p.id === savedProductId)) {
+        console.log("[ProductSelector] Initializing with saved product:", savedProductId)
         setSelectedProduct(savedProductId)
         setInitialized(true)
         return
       }
+      // 如果没有保存的产品，使用默认产品
       if (!selectedProductId && defaultProduct?.id) {
         console.log("[ProductSelector] Setting default product:", defaultProduct.id, defaultProduct.name)
         setSelectedProduct(defaultProduct.id)
@@ -66,6 +95,9 @@ export function ProductSelectorCard({ brandId }: ProductSelectorCardProps) {
   ])
 
   // 确保有有效的产品ID用于Select组件
+  // 优先使用 selectedProductId（用户当前选择，可能未保存）
+  // 如果没有，使用 savedProductId（已保存的产品，用户当前查看的产品）
+  // 最后使用默认产品
   const currentProductId = selectedProductId || savedProductId || defaultProduct?.id || ""
   
   console.log("[ProductSelector] Render:", {
@@ -117,20 +149,40 @@ export function ProductSelectorCard({ brandId }: ProductSelectorCardProps) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-5">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-gray-900">{translate("Product", language)}</h2>
+        <h2 className="text-sm font-semibold text-gray-900">{translate("Product Information", language)}</h2>
       </div>
-      <Select value={currentProductId} onValueChange={handleProductChange}>
-        <SelectTrigger className="w-full">
-          <SelectValue placeholder={translate("Select a product", language)} />
-        </SelectTrigger>
-        <SelectContent>
-          {activeProducts.map((product: Product) => (
-            <SelectItem key={product.id} value={product.id}>
-              {translate(product.name, language)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <div className="space-y-4">
+        {/* 产品选择器 */}
+        <div className="space-y-2">
+          <div className="text-xs font-medium text-gray-500">
+            {translate("Product", language)}
+          </div>
+          <Select value={currentProductId} onValueChange={handleProductChange}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder={translate("Select a product", language)} />
+            </SelectTrigger>
+            <SelectContent>
+              {activeProducts.map((product: Product) => (
+                <SelectItem key={product.id} value={product.id}>
+                  {translate(sanitizeProductName(product.name), language)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        {/* 产品类别 */}
+        {currentProduct && (
+          <div className="space-y-2">
+            <div className="text-xs font-medium text-gray-500">
+              {translate("Product Category", language)}
+            </div>
+            <div className="text-sm font-medium text-gray-900">
+              {currentProduct.category || "—"}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

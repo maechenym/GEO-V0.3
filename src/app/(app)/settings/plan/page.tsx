@@ -208,11 +208,21 @@ export default function PlanSettingsPage() {
       {/* Main Content */}
       <div className="container mx-auto px-4 sm:px-pageX py-2 sm:py-4 max-w-[1600px]">
         <div className="space-y-6">
+          {/* Loading State */}
+          {planLoading && (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-sm text-muted-foreground">
+                {language === "zh-TW" ? "載入中..." : "Loading..."}
+              </div>
+            </div>
+          )}
+
           {/* Current Plan and Upgrade Options - Side by Side */}
-          {(currentPlan && planData?.plan) || upgradePlans.length > 0 ? (
+          {/* 统一设计：所有用户都看到相同的布局结构 */}
+          {!planLoading && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Current Plan Section */}
-              {currentPlan && planData?.plan && (
+              {currentPlan && planData?.plan ? (
                 <div className="lg:col-span-1 space-y-3">
                   <h2 className="text-lg font-semibold text-foreground">
                     {language === "zh-TW" ? "當前訂閱" : "Current Subscription"}
@@ -322,43 +332,44 @@ export default function PlanSettingsPage() {
                     </div>
                   </Card>
                 </div>
+              ) : (
+                // 如果没有当前订阅，显示空状态占位符（保持布局一致）
+                <div className="lg:col-span-1 space-y-3">
+                  <h2 className="text-lg font-semibold text-foreground">
+                    {language === "zh-TW" ? "當前訂閱" : "Current Subscription"}
+                  </h2>
+                  <Card className="p-6 border border-border h-full flex items-center justify-center min-h-[400px]">
+                    <div className="text-center text-muted-foreground">
+                      <p className="text-sm">
+                        {language === "zh-TW" ? "暫無訂閱計劃" : "No active subscription"}
+                      </p>
+                    </div>
+                  </Card>
+                </div>
               )}
 
-              {/* Upgrade Plans Section */}
-              {upgradePlans.length > 0 && (
-                <div className={`${currentPlan && planData?.plan ? "lg:col-span-2" : "lg:col-span-3"} space-y-3`}>
-                  <h2 className="text-lg font-semibold text-foreground">
-                    {language === "zh-TW" ? "升級選項" : "Upgrade Options"}
-                  </h2>
+              {/* Upgrade Plans Section / All Plans Section */}
+              <div className={`${currentPlan && planData?.plan ? "lg:col-span-2" : "lg:col-span-3"} space-y-3`}>
+                <h2 className="text-lg font-semibold text-foreground">
+                  {currentPlan && planData?.plan
+                    ? (language === "zh-TW" ? "升級選項" : "Upgrade Options")
+                    : (language === "zh-TW" ? "選擇訂閱計劃" : "Choose Your Plan")}
+                </h2>
+                {upgradePlans.length > 0 ? (
+                  // 有订阅时显示升级选项
                   <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-2">
                     {upgradePlans.map((plan) => (
                       <UpgradeCard key={plan.planId} plan={plan} currentPlanId={currentPlanId} />
                     ))}
                   </div>
-                </div>
-              )}
-            </div>
-          ) : null}
-
-          {/* No Subscription - Show All Plans */}
-          {!currentPlanId && !planLoading && (
-            <div className="space-y-4">
-              <h2 className="text-lg font-semibold text-foreground">
-                {language === "zh-TW" ? "選擇訂閱計劃" : "Choose Your Plan"}
-              </h2>
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-                {allPlans.map((plan) => (
-                  <PlanCard key={plan.planId} plan={plan} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Loading State */}
-          {planLoading && (
-            <div className="flex items-center justify-center py-12">
-              <div className="text-sm text-muted-foreground">
-                {language === "zh-TW" ? "載入中..." : "Loading..."}
+                ) : (
+                  // 没有订阅时显示所有计划
+                  <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                    {allPlans.map((plan) => (
+                      <PlanCard key={plan.planId} plan={plan} />
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}

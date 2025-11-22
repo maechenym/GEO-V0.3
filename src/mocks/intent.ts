@@ -125,7 +125,7 @@ const mockPrompts: PromptItem[] = [
     mentions: 5,
     citation: 4,
     focus: 26.8,
-    intent: "Information",
+    intent: "Advice",
   },
   {
     id: "p8",
@@ -139,7 +139,7 @@ const mockPrompts: PromptItem[] = [
     mentions: 4,
     citation: 4,
     focus: 0,
-    intent: "Information",
+    intent: "Evaluation",
   },
   // 边缘计算与私有云/混合云部署相关
   {

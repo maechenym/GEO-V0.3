@@ -32,6 +32,7 @@ import {
   getDateRangeDays,
   getTodayShanghai,
 } from "@/lib/date-utils"
+import { exportToCSV } from "@/lib/export-utils"
 import { subDays, format } from "date-fns"
 import { useQuery } from "@tanstack/react-query"
 import apiClient from "@/services/api"
@@ -128,13 +129,16 @@ export default function VisibilityPage() {
   const [rankPage, setRankPage] = useState(1)
   const [focusPage, setFocusPage] = useState(1)
 
-  const minDate = useMemo(() => getUserRegisteredAt(30), [])
-  // Use data file's last date (2025-11-14) as maxDate instead of "today"
+  // Trend metric selector state
+  const [trendMetric, setTrendMetric] = useState<RankingMetric>("visibility")
+
+  const minDate = useMemo(() => parseDateShanghai("2025-11-13"), [])
+  // Use data file's last date (2025-11-20) as maxDate instead of "today"
   // This ensures date range selections don't exceed available data
   const maxDate = useMemo(() => {
-    // Data file contains dates from 2025-11-08 to 2025-11-14
-    // Use 2025-11-14 as the maximum date
-    return parseDateShanghai("2025-11-14")
+    // Data file contains dates from 2025-11-13 to 2025-11-20
+    // Use 2025-11-20 as the maximum date
+    return parseDateShanghai("2025-11-20")
   }, [])
 
   useEffect(() => {
@@ -146,23 +150,23 @@ export default function VisibilityPage() {
         const parsedStart = parseDateShanghai(startParam)
         const parsedEnd = parseDateShanghai(endParam)
         // Ensure dates are within data file bounds
-        const dataMinDate = parseDateShanghai("2025-11-08")
-        const dataMaxDate = parseDateShanghai("2025-11-14")
+        const dataMinDate = parseDateShanghai("2025-11-13")
+        const dataMaxDate = parseDateShanghai("2025-11-20")
         const validatedStart = parsedStart < dataMinDate ? dataMinDate : parsedStart > dataMaxDate ? dataMaxDate : parsedStart
         const validatedEnd = parsedEnd > dataMaxDate ? dataMaxDate : parsedEnd < dataMinDate ? dataMinDate : parsedEnd
         setDateRange({ start: validatedStart, end: validatedEnd })
       } catch {
-        // Default: last 7 days within data file (2025-11-08 to 2025-11-14)
+        // Default: last 7 days within data file (2025-11-14 to 2025-11-20)
         setDateRange({
-          start: parseDateShanghai("2025-11-08"),
-          end: parseDateShanghai("2025-11-14"),
+          start: parseDateShanghai("2025-11-14"),
+          end: parseDateShanghai("2025-11-20"),
         })
       }
     } else {
-      // Default: last 7 days within data file (2025-11-08 to 2025-11-14)
+      // Default: last 7 days within data file (2025-11-14 to 2025-11-20)
       setDateRange({
-        start: parseDateShanghai("2025-11-08"),
-        end: parseDateShanghai("2025-11-14"),
+        start: parseDateShanghai("2025-11-14"),
+        end: parseDateShanghai("2025-11-20"),
       })
     }
   }, [searchParams])
@@ -253,29 +257,27 @@ export default function VisibilityPage() {
     return random - 3 // -3 to +3
   }, [])
 
-  // 静态的 KPI 卡片 delta 值
+  // 静态的 KPI 卡片 delta 值 - 因为没有前七天的数据，所有delta都设为0
   const staticDeltas = useMemo(() => {
     return {
-      reach: 1.8,   // Reach: +1.8
-      rank: -0.5,  // Rank: -0.5 (排名下降是好事，所以用负数)
-      focus: 2.1,  // Focus: +2.1
-      visibility: -1.5, // Visibility: -1.5 (下降)
+      reach: 0,
+      rank: 0,
+      focus: 0,
+      visibility: 0,
     }
   }, [])
 
-  // 为排名数据添加随机 delta（如果 delta 为 0 或 undefined）
+  // 为排名数据设置 delta - 因为没有前七天的数据，所有delta都设为0
   const processRankingData = useCallback((ranking: RankingItem[]): RankingItem[] => {
+    // 保留原有的value和unit，只设置delta
     return ranking.map((item) => {
-      // 如果品牌没有delta或delta为0，使用随机生成的排名变化
-      const randomDelta = getRandomRankDelta(item.brand)
-      const finalDelta = item.delta !== undefined && item.delta !== 0 ? item.delta : randomDelta
-      
       return {
         ...item,
-        delta: finalDelta,
+        delta: 0, // 没有前七天数据，delta设为0
+        // value 和 unit 保持不变（Visibility 的原有逻辑）
       }
     })
-  }, [getRandomRankDelta])
+  }, [])
 
   const visibilityRankingData = useMemo(() => {
     const raw = apiData?.visibility.ranking || []
@@ -297,10 +299,33 @@ export default function VisibilityPage() {
     return processRankingData(raw)
   }, [apiData, processRankingData])
 
-  const visibilityTrendData = useMemo(() => {
+  // Dynamic trend data based on selected metric
+  const trendData = useMemo(() => {
     if (!apiData) return []
-    const trend = apiData.visibility.trends
-    const selfBrand = apiData.visibility.ranking.find((item) => item.isSelf)?.brand
+    
+    let trend: Array<{ date: string; [brandName: string]: string | number }> = []
+    let ranking: RankingItem[] = []
+    
+    switch (trendMetric) {
+      case "visibility":
+        trend = apiData.visibility.trends
+        ranking = apiData.visibility.ranking
+        break
+      case "reach":
+        trend = apiData.reach.trends
+        ranking = apiData.reach.ranking
+        break
+      case "rank":
+        trend = apiData.rank.trends
+        ranking = apiData.rank.ranking
+        break
+      case "focus":
+        trend = apiData.focus.trends
+        ranking = apiData.focus.ranking
+        break
+    }
+    
+    const selfBrand = ranking.find((item) => item.isSelf)?.brand
     if (!selfBrand) return []
 
     return trend.map((point) => {
@@ -312,7 +337,10 @@ export default function VisibilityPage() {
         value,
       }
     })
-  }, [apiData])
+  }, [apiData, trendMetric])
+
+  // Keep visibilityTrendData for backward compatibility (used in display)
+  const visibilityTrendData = trendData
 
   const metricsData = useMemo(() => {
     if (!apiData) {
@@ -328,6 +356,15 @@ export default function VisibilityPage() {
     const reachItem = apiData.reach.ranking.find((item) => item.isSelf)
     const rankItem = apiData.rank.ranking.find((item) => item.isSelf)
     const focusItem = apiData.focus.ranking.find((item) => item.isSelf)
+    
+    console.log('[Visibility] metricsData - reachItem:', reachItem)
+    console.log('[Visibility] metricsData - reach ranking items with isSelf:', apiData.reach.ranking.filter(item => item.isSelf))
+    console.log('[Visibility] metricsData - reach ranking total items:', apiData.reach.ranking.length)
+    console.log('[Visibility] metricsData - first 5 reach ranking items:', apiData.reach.ranking.slice(0, 5).map(item => ({ brand: item.brand, value: item.value, isSelf: item.isSelf })))
+    if (!reachItem) {
+      console.warn('[Visibility] metricsData - No reachItem found with isSelf=true!')
+      console.log('[Visibility] metricsData - All reach items:', apiData.reach.ranking.map(item => ({ brand: item.brand, value: item.value, isSelf: item.isSelf })))
+    }
 
     return {
       visibility: {
@@ -517,8 +554,24 @@ export default function VisibilityPage() {
   }
 
   const handleTabChange = (newTab: RankingMetric) => {
+    console.log('[Visibility] Tab changed from', tab, 'to', newTab)
     setTab(newTab)
     setPulsingCard(newTab)
+    // Reset page to 1 when switching tabs
+    switch (newTab) {
+      case "visibility":
+        setVisibilityPage(1)
+        break
+      case "reach":
+        setReachPage(1)
+        break
+      case "rank":
+        setRankPage(1)
+        break
+      case "focus":
+        setFocusPage(1)
+        break
+    }
     requestAnimationFrame(() => {
       const container = document.getElementById(RANKING_SECTION_ID)
       if (container) {
@@ -548,11 +601,7 @@ export default function VisibilityPage() {
     }
   }, [tab, language])
 
-  const handleExport = () => {
-    toast({ title: translate("Export feature", language), description: translate("Export is under development.", language) })
-  }
-
-  const getMetricLabel = (metric: RankingMetric) => {
+  const getMetricLabel = useCallback((metric: RankingMetric) => {
     switch (metric) {
       case "visibility":
         return translate("Visibility", language)
@@ -563,19 +612,95 @@ export default function VisibilityPage() {
       case "focus":
         return translate("Focus", language)
     }
-  }
+  }, [language, translate])
+
+  const handleExport = useCallback(() => {
+    if (!apiData || isLoading) return
+    
+    try {
+      // Prepare CSV data for the current selected date range
+      const csvData: Array<Record<string, any>> = []
+      
+      // Get the metric data based on current tab
+      const currentMetric = tab
+      let rankingData: RankingItem[] = []
+      
+      switch (currentMetric) {
+        case "visibility":
+          rankingData = visibilityRankingData
+          break
+        case "reach":
+          rankingData = reachRankingData
+          break
+        case "rank":
+          rankingData = rankRankingData
+          break
+        case "focus":
+          rankingData = focusRankingData
+          break
+      }
+      
+      // Add header row
+      const headers = [
+        language === "zh-TW" ? "统计时间" : "Date",
+        language === "zh-TW" ? "品牌" : "Brand",
+        language === "zh-TW" ? "产品" : "Product",
+        language === "zh-TW" ? "模型平台" : "Model Platform",
+        translate(getMetricLabel(currentMetric), language),
+        language === "zh-TW" ? "排名" : "Rank",
+        language === "zh-TW" ? "变化" : "Change",
+      ]
+      
+      // Add data rows - export all visible brands for the selected date range
+      rankingData.forEach((item) => {
+        csvData.push({
+          [headers[0]]: `${formatDateShanghai(dateRange.start)} ~ ${formatDateShanghai(dateRange.end)}`,
+          [headers[1]]: item.brand,
+          [headers[2]]: selectedProductId || "All",
+          [headers[3]]: selectedModel || "All",
+          [headers[4]]: typeof item.value === "number" ? item.value.toFixed(2) : item.value,
+          [headers[5]]: item.rank,
+          [headers[6]]: typeof item.delta === "number" ? (item.delta > 0 ? `+${item.delta.toFixed(2)}` : item.delta.toFixed(2)) : item.delta || "0",
+        })
+      })
+      
+      // Export to CSV
+      const filename = `visibility_${getMetricLabel(currentMetric)}_${formatDateShanghai(dateRange.start)}_${formatDateShanghai(dateRange.end)}.csv`
+      exportToCSV(csvData, filename, headers)
+      
+      toast({
+        title: language === "zh-TW" ? "导出成功" : "Export Successful",
+        description: language === "zh-TW" ? "可见度数据已导出" : "Visibility data exported",
+      })
+    } catch (error) {
+      console.error("Error exporting visibility data:", error)
+      toast({
+        title: language === "zh-TW" ? "导出失败" : "Export Failed",
+        description: language === "zh-TW" ? "导出过程中发生错误" : "An error occurred during export",
+        variant: "destructive",
+      })
+    }
+  }, [apiData, isLoading, tab, dateRange, visibilityRankingData, reachRankingData, rankRankingData, focusRankingData, selectedProductId, selectedModel, language, toast, translate, getMetricLabel])
 
   const getRankingData = (metric: RankingMetric): RankingItem[] => {
+    console.log('[Visibility] getRankingData called for metric:', metric)
+    let data: RankingItem[] = []
     switch (metric) {
       case "visibility":
-        return visibilityRankingData
+        data = visibilityRankingData
+        break
       case "reach":
-        return reachRankingData
+        data = reachRankingData
+        break
       case "rank":
-        return rankRankingData
+        data = rankRankingData
+        break
       case "focus":
-        return focusRankingData
+        data = focusRankingData
+        break
     }
+    console.log('[Visibility] getRankingData returning', data.length, 'items for', metric)
+    return data
   }
 
   const renderRankingContent = (
@@ -589,9 +714,30 @@ export default function VisibilityPage() {
     const totalBrands = rankingItems.length
     const totalPages = Math.max(1, Math.ceil(totalBrands / brandsPerPage))
 
-    const startIndex = (currentPage - 1) * brandsPerPage
+    // Reset to page 1 if current page is out of range (use valid page for calculation)
+    const validPage = currentPage > totalPages && totalPages > 0 ? 1 : currentPage
+    if (currentPage > totalPages && totalPages > 0 && currentPage > 1) {
+      console.log('[Visibility] Resetting currentPage from', currentPage, 'to 1 (totalPages:', totalPages, ')')
+      setCurrentPage(1)
+    }
+    
+    const startIndex = (validPage - 1) * brandsPerPage
     const endIndex = startIndex + brandsPerPage
     const paginatedBrands = rankingItems.slice(startIndex, endIndex)
+    
+    // Debug: Log pagination info
+    console.log('[Visibility] Pagination:', {
+      metric,
+      totalBrands,
+      brandsPerPage,
+      totalPages,
+      currentPage,
+      validPage,
+      startIndex,
+      endIndex,
+      paginatedCount: paginatedBrands.length,
+      showingBrands: paginatedBrands.map(b => b.brand).slice(0, 5),
+    })
 
     const formatDeltaValue = (delta: number, unit?: string) => {
       if (!Number.isFinite(delta) || delta === 0) return "—"
@@ -679,16 +825,18 @@ export default function VisibilityPage() {
           {paginatedBrands.map((item, index) => (
             <motion.div
               key={`${metric}-${item.brand}-${item.rank}-${index}`}
-              initial={{ opacity: 0, x: -10 }}
+              initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.04 }}
-                            className={`flex items-center justify-between rounded-md border px-2.5 py-1.5 transition-colors ${
-                              item.isSelf ? "border-brand-600 bg-brand-50" : "border-ink-200 bg-white hover:bg-ink-50"
-                            }`}
-                          >
+              transition={{ delay: index * 0.05 }}
+              className={`flex items-center justify-between py-1.5 px-2.5 rounded-md border cursor-pointer transition-colors hover:bg-ink-50 ${
+                item.isSelf
+                  ? "bg-brand-50 border-brand-600"
+                  : "bg-white border-ink-200"
+              }`}
+            >
                             <div className="flex items-center gap-2.5 flex-1 min-w-0">
                               <div
-                                className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold shrink-0 ${
+                                className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-medium shrink-0 ${
                                   item.isSelf ? "bg-brand-600 text-white" : "bg-ink-100 text-ink-600"
                                 }`}
                               >
@@ -702,7 +850,7 @@ export default function VisibilityPage() {
                                     </span>
                                   </DelayedTooltip>
                                   {item.isSelf && (
-                                    <Badge variant="outline" className="text-2xs px-1.5 py-0 border-brand-600 text-brand-600">
+                                    <Badge variant="outline" className="text-xs px-1.5 py-0 border-ink-200 text-ink-600">
                                       You
                                     </Badge>
                                   )}
@@ -739,40 +887,30 @@ export default function VisibilityPage() {
 
         {totalPages > 1 && (
           <div className="mt-3 pt-3 border-t border-ink-200">
-            <div className="flex items-center justify-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handlePrevPage}
-                disabled={currentPage === 1}
-                className="h-7 w-7 p-0 border-ink-200 disabled:opacity-50"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </Button>
-              <div className="flex items-center gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                  <Button
-                    key={page}
-                    variant={currentPage === page ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handlePageClick(page)}
-                    className={`h-7 w-7 p-0 text-xs transition-colors ${
-                      currentPage === page ? "bg-brand-600 text-white border-brand-600" : "border-ink-200 hover:bg-ink-50"
-                    }`}
-                  >
-                    {page}
-                  </Button>
-                ))}
+            <div className="flex items-center justify-center">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePrevPage}
+                  disabled={currentPage === 1}
+                  className="h-7 w-7 p-0 border-ink-200 disabled:opacity-50"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </Button>
+                <div className="flex items-center gap-2 px-3 text-sm text-gray-700">
+                  <span>{currentPage} / {totalPages}</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleNextPage}
+                  disabled={currentPage === totalPages}
+                  className="h-7 w-7 p-0 border-ink-200 disabled:opacity-50"
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleNextPage}
-                disabled={currentPage === totalPages}
-                className="h-7 w-7 p-0 border-ink-200 disabled:opacity-50"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </Button>
             </div>
           </div>
         )}
@@ -899,28 +1037,61 @@ export default function VisibilityPage() {
                         </TooltipContent>
                       </Tooltip>
                     </div>
+                    <Select value={trendMetric} onValueChange={(value) => setTrendMetric(value as RankingMetric)}>
+                      <SelectTrigger className="w-[140px] h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {([
+                          { value: "visibility" as const, label: translate("Visibility", language) },
+                          { value: "reach" as const, label: translate("Reach", language) },
+                          { value: "rank" as const, label: language === "en" ? "Position" : translate("Rank", language) },
+                          { value: "focus" as const, label: translate("Focus", language) },
+                        ] as Array<{ value: RankingMetric; label: string }>).map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="mb-3 flex items-baseline gap-4">
                     <span className="text-2xl font-semibold text-ink-900">
-                      {metricsData.visibility.value?.toFixed(1)}
+                      {(() => {
+                        const metric = metricsData[trendMetric]
+                        return metric.value?.toFixed(1)
+                      })()}
                       <span className="text-xs font-medium ml-1 text-ink-500">
-                        {metricsData.visibility.unit || "%"}
+                        {(() => {
+                          const metric = metricsData[trendMetric]
+                          return metric.unit || "%"
+                        })()}
                       </span>
                     </span>
-                    <div className={`flex items-center gap-1.5 text-sm font-medium ${staticDeltas.visibility > 0 ? "text-green-600" : staticDeltas.visibility < 0 ? "text-red-600" : "text-ink-600"}`}>
-                      {staticDeltas.visibility > 0 ? (
-                        <>
-                          <ArrowUp className="h-3.5 w-3.5" />
-                          <span>{Math.abs(staticDeltas.visibility).toFixed(1)}%</span>
-                        </>
-                      ) : staticDeltas.visibility < 0 ? (
-                        <>
-                          <ArrowDown className="h-3.5 w-3.5" />
-                          <span>{Math.abs(staticDeltas.visibility).toFixed(1)}%</span>
-                        </>
-                      ) : (
-                        <span className="text-xs text-ink-400">—</span>
-                      )}
+                    <div className={`flex items-center gap-1.5 text-sm font-medium ${(() => {
+                      const delta = staticDeltas[trendMetric]
+                      return delta > 0 ? "text-green-600" : delta < 0 ? "text-red-600" : "text-ink-600"
+                    })()}`}>
+                      {(() => {
+                        const delta = staticDeltas[trendMetric]
+                        if (delta > 0) {
+                          return (
+                            <>
+                              <ArrowUp className="h-3.5 w-3.5" />
+                              <span>{Math.abs(delta).toFixed(1)}%</span>
+                            </>
+                          )
+                        } else if (delta < 0) {
+                          return (
+                            <>
+                              <ArrowDown className="h-3.5 w-3.5" />
+                              <span>{Math.abs(delta).toFixed(1)}%</span>
+                            </>
+                          )
+                        } else {
+                          return <span className="text-xs text-ink-400">—</span>
+                        }
+                      })()}
                       <span className="text-xs text-ink-500 ml-1">
                         {isOneDay 
                           ? translate("vs previous day", language)
@@ -929,8 +1100,8 @@ export default function VisibilityPage() {
                       </span>
                     </div>
                   </div>
-                  {!visibilityTrendData || visibilityTrendData.length === 0 ? (
-                    <div className="h-[300px] w-full bg-ink-50 rounded-md flex items-center justify-center border border-dashed border-ink-200">
+                  {!trendData || trendData.length === 0 ? (
+                    <div className="h-[282px] w-full bg-ink-50 rounded-md flex items-center justify-center border border-dashed border-ink-200">
                       <div className="text-center">
                         <div className="text-sm text-ink-500 mb-1">
                           {translate("No visibility trend data", language)}
@@ -941,9 +1112,9 @@ export default function VisibilityPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="h-[300px] w-full min-h-[300px] min-w-0" style={{ position: 'relative' }}>
-                      <ResponsiveContainer width="100%" height={300} minHeight={300}>
-                        <LineChart data={visibilityTrendData} margin={{ top: 10, right: 16, left: 12, bottom: 8 }}>
+                    <div className="h-[282px] w-full min-h-[282px] min-w-0" style={{ position: 'relative' }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={trendData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                           <CartesianGrid stroke="#EEF2F7" vertical={false} />
                           <XAxis
                             dataKey="date"
@@ -970,7 +1141,10 @@ export default function VisibilityPage() {
                               fontSize: "12px",
                             }}
                             labelStyle={{ color: INK_COLORS[900], marginBottom: "4px" }}
-                            formatter={(value: number) => [`${value.toFixed(1)}%`, language === "zh-TW" ? "Visibility" : "Visibility"]}
+                            formatter={(value: number) => {
+                              const metricLabel = getMetricLabel(trendMetric)
+                              return [`${value.toFixed(1)}%`, metricLabel]
+                            }}
                             labelFormatter={(label) => `Date: ${label}`}
                           />
                           <Line
@@ -1002,7 +1176,7 @@ export default function VisibilityPage() {
                   <div className="flex items-center justify-between mb-3">
                     <div>
                       <h2 className="text-sm font-semibold text-ink-900">
-                        {translate("Visibility Ranking", language)}
+                        {translate("Ranking", language)}
                       </h2>
                     </div>
                     <Select value={tab} onValueChange={(value) => handleTabChange(value as RankingMetric)}>
@@ -1028,7 +1202,7 @@ export default function VisibilityPage() {
                     </Select>
                   </div>
 
-                  <div className="flex-1 flex flex-col min-h-0">
+                  <div className="flex-1 flex flex-col min-h-0" key={`ranking-${tab}`}>
                     {(() => {
                       const pagination = (() => {
                         switch (tab) {
@@ -1043,6 +1217,7 @@ export default function VisibilityPage() {
                             return { page: focusPage, setPage: setFocusPage }
                         }
                       })()
+                      console.log('[Visibility] Rendering ranking content for tab:', tab, 'page:', pagination.page)
                       return renderRankingContent(tab, pagination.page, pagination.setPage)
                     })()}
                   </div>
@@ -1050,6 +1225,9 @@ export default function VisibilityPage() {
               </FadeUp>
             </div>
 
+            {/* 热力图功能暂时隐藏，后续版本会补上 */}
+            {/* Heatmap feature temporarily hidden, will be added in future version */}
+            {/* 
             <div className="lg:col-span-7">
               <FadeUp delay={0.18}>
                 <div className="rounded-lg border border-ink-200 bg-white p-4 shadow-subtle hover:shadow-md transition-shadow">
@@ -1095,7 +1273,6 @@ export default function VisibilityPage() {
                           </div>
                         ))}
 
-                        {/* 按照后端返回的顺序显示 sources，不进行排序 */}
                         {heatmapData.sources.map((source) => (
                           <Fragment key={source.slug}>
                             <button
@@ -1149,10 +1326,14 @@ export default function VisibilityPage() {
                 </div>
               </FadeUp>
             </div>
+            */}
           </div>
         </div>
       </div>
 
+      {/* 热力图对话框暂时隐藏，后续版本会补上 */}
+      {/* Heatmap dialog temporarily hidden, will be added in future version */}
+      {/* 
       <Dialog open={heatmapDialogOpen} onOpenChange={handleHeatmapDialogChange}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
@@ -1186,7 +1367,7 @@ export default function VisibilityPage() {
                   {language === "zh-TW" ? "模型示例" : "Model example"}
                 </p>
                 <p className="mt-2 text-sm text-ink-700 leading-relaxed">
-                  {selectedHeatmapCell.example}
+                  {translate(selectedHeatmapCell.example, language)}
                 </p>
               </div>
               <div className="flex items-center justify-between text-xs text-ink-500">
@@ -1203,6 +1384,7 @@ export default function VisibilityPage() {
           )}
         </DialogContent>
       </Dialog>
+      */}
     </TooltipProvider>
   )
 }

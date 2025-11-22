@@ -4,9 +4,10 @@ import { z } from "zod"
  * 品牌基础信息 Schema
  */
 export const BrandBasicSchema = z.object({
-  brandName: z.string().min(1, "品牌名称为必填"),
-  productName: z.string().min(1, "产品名称为必填"),
-  category: z.string().optional().nullable(), // 产品类别（选填）
+  brandName: z.string().min(1, "Brand Name is required"),
+  productCategory: z.string().min(1, "Product Category is required"), // 产品类别（必填）
+  specificProduct: z.string().optional().nullable(), // 具体产品（选填）
+  industry: z.string().optional().nullable(), // 行业（选填）
   competitors: z.array(z.string()).optional().default([]), // 竞品品牌列表（选填）
 })
 
@@ -34,14 +35,4 @@ export const CompetitorSchema = z.object({
 })
 
 export type Competitor = z.infer<typeof CompetitorSchema>
-
-/**
- * Brand Suggest API 响应（已移除，不再使用）
- */
-export const BrandSuggestResponseSchema = z.object({
-  personas: z.array(PersonaSchema),
-  competitors: z.array(CompetitorSchema),
-})
-
-export type BrandSuggestResponse = z.infer<typeof BrandSuggestResponseSchema>
 

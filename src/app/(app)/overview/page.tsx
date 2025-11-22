@@ -55,7 +55,7 @@ import { format } from "date-fns"
 import { useQuery } from "@tanstack/react-query"
 import apiClient from "@/services/api"
 import { useLanguageStore } from "@/store/language.store"
-import { translate, getTooltipContent } from "@/lib/i18n"
+import { translate, getTooltipContent, toTraditional } from "@/lib/i18n"
 import { useBrandUIStore } from "@/store/brand-ui.store"
 
 // Chart colors - use brand color for all lines (OpenAI style)
@@ -190,24 +190,24 @@ export default function OverviewPage() {
         const parsedStart = parseDateShanghai(startParam)
         const parsedEnd = parseDateShanghai(endParam)
         // Ensure dates are within data file bounds
-        const dataMinDate = parseDateShanghai("2025-11-08")
-        const dataMaxDate = parseDateShanghai("2025-11-14")
+        const dataMinDate = parseDateShanghai("2025-11-13")
+        const dataMaxDate = parseDateShanghai("2025-11-20")
         return {
           start: parsedStart < dataMinDate ? dataMinDate : parsedStart > dataMaxDate ? dataMaxDate : parsedStart,
           end: parsedEnd > dataMaxDate ? dataMaxDate : parsedEnd < dataMinDate ? dataMinDate : parsedEnd,
         }
       } catch {
-        // Default: last 7 days within data file (2025-11-08 to 2025-11-14)
+        // Default: last 7 days within data file (2025-11-14 to 2025-11-20)
         return {
-          start: parseDateShanghai("2025-11-08"),
-          end: parseDateShanghai("2025-11-14"),
+          start: parseDateShanghai("2025-11-14"),
+          end: parseDateShanghai("2025-11-20"),
         }
       }
     }
-    // Default: last 7 days within data file (2025-11-08 to 2025-11-14)
+    // Default: last 7 days within data file (2025-11-14 to 2025-11-20)
     return {
-      start: parseDateShanghai("2025-11-08"),
-      end: parseDateShanghai("2025-11-14"),
+      start: parseDateShanghai("2025-11-14"),
+      end: parseDateShanghai("2025-11-20"),
     }
   }, [searchParams])
 
@@ -224,13 +224,13 @@ export default function OverviewPage() {
 
   // Get user registered date (fallback to 30 days ago)
   const minDate = useMemo(() => getUserRegisteredAt(30), [])
-  // Use data file's last date (2025-11-14) as maxDate instead of "today"
-  // This ensures date range selections don't exceed available data
-  const maxDate = useMemo(() => {
-    // Data file contains dates from 2025-11-08 to 2025-11-14
-    // Use 2025-11-14 as the maximum date
-    return parseDateShanghai("2025-11-14")
-  }, [])
+  // Use data file's last date (2025-11-20) as maxDate instead of "today"
+    // This ensures date range selections don't exceed available data
+    const maxDate = useMemo(() => {
+      // Data file contains dates from 2025-11-13 to 2025-11-20
+      // Use 2025-11-20 as the maximum date
+      return parseDateShanghai("2025-11-20")
+    }, [])
 
   // Fetch data from API
   const { data: apiData, isLoading, error } = useQuery<OverviewData>({
@@ -286,14 +286,15 @@ export default function OverviewPage() {
   // Get brands list from API data
   const brands = useMemo(() => {
     if (!apiData?.ranking) return []
+    
     return apiData.ranking.map((c) => c.name)
   }, [apiData])
 
   // Initialize visible brands
   useEffect(() => {
     if (brands.length > 0 && visibleBrands.size === 0) {
-      const selfBrand = brands.find((b) => b === "英业达" || b === "Inventec" || b === "Your Brand")
-      const otherBrands = brands.filter((b) => b !== "英业达" && b !== "Inventec" && b !== "Your Brand")
+      const selfBrand = brands.find((b) => b === "英业达" || b === "Inventec" || b === "Your Brand" || b === "中国信托" || b === "中國信託" || b === "CTBC" || b === "ctbc")
+      const otherBrands = brands.filter((b) => b !== "英业达" && b !== "Inventec" && b !== "Your Brand" && b !== "中国信托" && b !== "中國信託" && b !== "CTBC" && b !== "ctbc")
       const initialBrands = selfBrand
         ? [selfBrand, ...otherBrands.slice(0, MAX_VISIBLE_BRANDS - 1)]
         : otherBrands.slice(0, MAX_VISIBLE_BRANDS)
@@ -302,7 +303,7 @@ export default function OverviewPage() {
   }, [brands, visibleBrands.size, MAX_VISIBLE_BRANDS])
 
   const isSelfBrand = (brand: string) => {
-    return brand === "Your Brand" || brand === "英业达" || brand === "Inventec"
+    return brand === "Your Brand" || brand === "英业达" || brand === "Inventec" || brand === "中国信托" || brand === "中國信託" || brand === "CTBC" || brand === "ctbc"
   }
 
   const canAddBrand = visibleBrands.size < MAX_VISIBLE_BRANDS
@@ -315,24 +316,42 @@ export default function OverviewPage() {
 
   // Get self brand name from API data - 根据语言显示中文或英文
   const selfBrandName = useMemo(() => {
-    if (!apiData?.ranking) return null
+    if (!apiData?.ranking) {
+      console.log('[Overview] No ranking data available')
+      return null
+    }
+    console.log('[Overview] Looking for self brand in ranking, total brands:', apiData.ranking.length)
+    const selfBrands = apiData.ranking.filter((c) => c.isSelf)
+    console.log('[Overview] Found self brands:', selfBrands.map(b => ({ name: b.name, isSelf: b.isSelf })))
     const selfBrand = apiData.ranking.find((c) => c.isSelf)
-    if (!selfBrand) return null
+    if (!selfBrand) {
+      console.warn('[Overview] No self brand found in ranking data')
+      return null
+    }
     
     // 根据语言显示不同的品牌名
     const rawName = selfBrand.name
     if (rawName === "英业达" || rawName === "Inventec") {
       return language === "zh-TW" ? "英业达" : "Inventec"
     }
-    return rawName
+    if (rawName === "中国信托" || rawName === "中國信託" || rawName === "CTBC" || rawName === "ctbc") {
+      // 在繁体中文模式下，转换为繁体中文
+      return language === "zh-TW" ? toTraditional("中国信托") : "CTBC"
+    }
+    // 对于其他品牌名，如果是繁体中文模式，也进行转换
+    return language === "zh-TW" ? toTraditional(rawName) : rawName
   }, [apiData, language])
 
   // Use API data - prepare chart data for self brand and selected competitors
   const chartData = useMemo(() => {
-    if (!apiData?.brandInfluence?.trend) return []
+    if (!apiData?.brandInfluence?.trend) {
+      console.log('[Overview] No trend data in apiData')
+      return []
+    }
     
     // Get self brand trend data
     const selfTrend = apiData.brandInfluence.trend
+    console.log('[Overview] Self trend data:', selfTrend.map(t => ({ date: t.date, value: t.brandInfluence })))
     
     // Get competitor trends if available (from apiData directly)
     const competitorTrends = (apiData as any)?.competitorTrends || {}
@@ -382,8 +401,13 @@ export default function OverviewPage() {
   // Get available competitors (excluding self brand)
   const availableCompetitors = useMemo(() => {
     if (!apiData?.ranking || !selfBrandName) return []
+    
     return apiData.ranking
-      .filter((c) => !c.isSelf && c.name !== selfBrandName)
+      .filter((c) => {
+        // 排除本品牌
+        if (c.isSelf || c.name === selfBrandName) return false
+        return true
+      })
       .map((c) => c.name)
       .filter((name) => !selectedCompetitors.includes(name))
   }, [apiData?.ranking, selfBrandName, selectedCompetitors])
@@ -418,6 +442,8 @@ export default function OverviewPage() {
   const data: OverviewData | null = useMemo(() => {
     if (!apiData) return null
     console.log('[Overview] Updating data from apiData, ranking length:', apiData.ranking?.length)
+    const selfBrandsInRanking = apiData.ranking?.filter((c) => c.isSelf) || []
+    console.log('[Overview] Self brands in ranking:', selfBrandsInRanking.map(b => ({ name: b.name, isSelf: b.isSelf, rank: b.rank })))
     
     return {
       kpis: apiData.kpis,
@@ -475,12 +501,45 @@ export default function OverviewPage() {
 
     setExporting(true)
     try {
-      // Prepare export data
-      const exportData = data.ranking.map((brand) => ({
-        brandName: brand.name,
-        dates: data.brandInfluence.trend.map((t) => t.date),
-        values: data.brandInfluence.trend.map((t) => t.brandInfluence),
-      }))
+      // Generate actual date list based on selected date range
+      // Note: API returns trend dates that are offset by -1 day (e.g., file date 2025-11-14 becomes display date 2025-11-13)
+      // So we need to map the selected dates to the API trend dates
+      const exportDates: string[] = []
+      const currentDate = new Date(dateRange.start)
+      const endDate = new Date(dateRange.end)
+      
+      // Generate all dates in the selected range (these are display dates)
+      while (currentDate <= endDate) {
+        exportDates.push(formatDateShanghai(currentDate))
+        currentDate.setDate(currentDate.getDate() + 1)
+      }
+      
+      // Prepare export data - use the actual selected date range
+      const exportData = data.ranking.map((brand) => {
+        // Find trend values for each date in the selected range
+        const brandTrend = data.brandInfluence.trend || []
+        // Create a map of date to value for quick lookup (API returns dates already offset by -1 day)
+        const trendMap = new Map(brandTrend.map((t: any) => [t.date, t.brandInfluence]))
+        
+        // Get competitor trend data if available
+        const competitorName = brand.name
+        const competitorTrend = data.competitorTrends?.[competitorName] || []
+        const competitorTrendMap = new Map(competitorTrend.map((t: any) => [t.date, t.brandInfluence]))
+        
+        // Map export dates to trend values
+        // Since API returns dates offset by -1 day, the export dates should match directly
+        const values = exportDates.map((date) => {
+          // First try competitor trend, then main trend
+          const value = competitorTrendMap.get(date) ?? trendMap.get(date) ?? 0
+          return value
+        })
+        
+        return {
+          brandName: brand.name,
+          dates: exportDates, // Use actual selected dates
+          values: values,
+        }
+      })
 
       await exportBrandInfluenceToExcel(
         exportData,
@@ -521,30 +580,70 @@ export default function OverviewPage() {
   const sortedBrands = useMemo(() => {
     if (!apiData?.ranking) return []
     console.log('[Overview] Updating sortedBrands, apiData.ranking length:', apiData.ranking.length, 'dateRange:', formatDateShanghai(dateRange.start), '-', formatDateShanghai(dateRange.end))
-    return [...apiData.ranking].sort((a, b) => b.score - a.score).map((brand, index) => {
-      // 如果品牌没有delta或delta为0，使用随机生成的排名变化
-      const randomDelta = getRandomRankDelta(brand.name)
-      const finalDelta = brand.delta !== undefined && brand.delta !== 0 ? brand.delta : randomDelta
-      
+    const selfBrandsInRanking = apiData.ranking.filter((c) => c.isSelf)
+    console.log('[Overview] Self brands in ranking before sort:', selfBrandsInRanking.map(b => ({ name: b.name, isSelf: b.isSelf, rank: b.rank, score: b.score })))
+    
+    // API已经按score排序并分配了rank，直接使用API返回的ranking
+    return apiData.ranking.map((brand) => {
+      // 因为没有前七天的数据，所有delta都设为0
       return {
         ...brand,
-        rank: index + 1,
-        delta: finalDelta, // 使用随机生成的排名变化
+        delta: 0, // 没有前七天数据，delta设为0
       }
     })
   }, [apiData?.ranking, dateRange.start, dateRange.end])
 
-  const selfBrand = useMemo(() => sortedBrands.find((c) => c.isSelf), [sortedBrands])
+  const selfBrand = useMemo(() => {
+    const found = sortedBrands.find((c) => c.isSelf)
+    if (!found) {
+      console.warn('[Overview] No self brand found in sortedBrands, total brands:', sortedBrands.length)
+      console.log('[Overview] First 5 brands:', sortedBrands.slice(0, 5).map(b => ({ name: b.name, isSelf: b.isSelf })))
+      console.log('[Overview] All brands with isSelf:', sortedBrands.filter(b => b.isSelf).map(b => ({ name: b.name, isSelf: b.isSelf })))
+      console.log('[Overview] Looking for brands containing "中国信托":', sortedBrands.filter(b => b.name.includes('中国信托') || b.name.includes('中國信託') || b.name.includes('CTBC')).map(b => ({ name: b.name, isSelf: b.isSelf })))
+    } else {
+      console.log('[Overview] Found self brand in sortedBrands:', { name: found.name, isSelf: found.isSelf, rank: found.rank })
+    }
+    return found
+  }, [sortedBrands])
 
   const brandsPerPage = 7
+  // 包含所有品牌（包括本品牌），因为用户希望本品牌也显示在ranking列表中
   const totalBrands = sortedBrands.length
   const totalPages = Math.ceil(totalBrands / brandsPerPage)
+  
+  // Debug: Log pagination info
+  console.log('[Overview] Pagination calculation:', {
+    totalBrands,
+    brandsPerPage,
+    totalPages,
+    currentPage,
+    shouldShowPagination: totalPages > 1,
+  })
+  
+  // Reset to page 1 if current page is out of range
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      console.log('[Overview] Resetting currentPage from', currentPage, 'to 1 (totalPages:', totalPages, ')')
+      setCurrentPage(1)
+    }
+  }, [currentPage, totalPages])
 
   const paginatedBrands = useMemo(() => {
     const startIndex = (currentPage - 1) * brandsPerPage
     const endIndex = startIndex + brandsPerPage
-    return sortedBrands.slice(startIndex, endIndex)
-  }, [sortedBrands, currentPage])
+    const paginated = sortedBrands.slice(startIndex, endIndex)
+    console.log('[Overview] Pagination:', {
+      totalBrands: sortedBrands.length,
+      brandsPerPage,
+      totalPages,
+      currentPage,
+      startIndex,
+      endIndex,
+      paginatedCount: paginated.length,
+      showingBrands: paginated.map(b => b.name).slice(0, 5),
+    })
+    return paginated
+  }, [sortedBrands, currentPage, brandsPerPage, totalPages])
 
   const periodDays = getDateRangeDays(dateRange.start, dateRange.end)
   // 判断是否为1day模式：periodDays为1或2且日期范围不超过2天
@@ -603,16 +702,12 @@ export default function OverviewPage() {
     navigateWithDateParams("/insights/intent", { model: selectedModel })
   }, [navigateWithDateParams, selectedModel])
 
-  // 静态的delta值（增长概率）- 使用固定的随机值，确保每次渲染一致
+  // 静态的delta值（增长概率）- 因为没有前七天的数据，所有delta都设为0
   const staticDeltas = useMemo(() => {
-    // 使用基于卡片key的伪随机数，确保每次渲染结果一致
-    const brandInfluenceDelta = 2.3 // Brand influence: +2.3
-    const visibilityDelta = -1.5   // Visibility: -1.5
-    const sentimentDelta = 0.8      // Sentiment: +0.8
     return {
-      "brand-influence": brandInfluenceDelta,
-      "visibility": visibilityDelta,
-      "sentiment": sentimentDelta,
+      "brand-influence": 0,
+      "visibility": 0,
+      "sentiment": 0,
     }
   }, [])
 
@@ -892,7 +987,7 @@ export default function OverviewPage() {
                       </Button>
                     </div>
                     {/* Brand Influence Chart */}
-                    <div className="h-[265px] w-full mt-6">
+                    <div className="h-[267px] w-full mt-6">
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart
                           data={chartData}
@@ -1150,22 +1245,8 @@ export default function OverviewPage() {
                               >
                                 <ChevronLeft className="h-3.5 w-3.5" />
                               </Button>
-                              <div className="flex items-center gap-1">
-                                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                                  <Button
-                                    key={page}
-                                variant={currentPage === page ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setCurrentPage(page)}
-                                className={`h-7 w-7 p-0 text-xs border-ink-200 transition-colors ${
-                                  currentPage === page
-                                    ? "bg-brand-600 text-white border-brand-600"
-                                    : "bg-white hover:bg-ink-50"
-                                }`}
-                                  >
-                                    {page}
-                                  </Button>
-                                ))}
+                              <div className="flex items-center gap-2 px-3 text-sm text-gray-700">
+                                <span>{currentPage} / {totalPages}</span>
                               </div>
                               <Button
                                 variant="outline"

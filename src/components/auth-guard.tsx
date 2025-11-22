@@ -70,9 +70,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     // Onboarding 路径
     const isOnboardingPath = pathname?.startsWith("/onboarding") ?? false
 
-    // 如果已登录且有品牌，访问登录/注册页或首页时重定向到 overview
+    // 如果已登录且有品牌，访问登录/注册页时重定向到 overview
+    // 注意：访问首页时不自动跳转，让用户可以选择查看官网内容
     if (token && profile && profile.hasBrand) {
-      if (pathname === "/login" || pathname === "/signup" || pathname === "/") {
+      if (pathname === "/login" || pathname === "/signup") {
         redirectingRef.current = true
         router.replace("/overview")
         return

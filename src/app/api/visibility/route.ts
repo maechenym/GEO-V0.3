@@ -38,7 +38,7 @@ const TYPE_MAPPING: Record<string, string> = {
   "Other": "Other", // 保持 Other 不变
 }
 
-const SELF_BRAND_CANDIDATES = ["英业达", "Inventec"]
+const SELF_BRAND_CANDIDATES = ["中国信托", "中國信託", "CTBC", "ctbc", "英业达", "Inventec"]
 const MODEL_KEYS = ["chatgpt", "gemini", "claude"] as const
 
 const slugify = (value: string) =>
@@ -97,6 +97,7 @@ interface RankingItem {
   delta: number
   rank: number
   isSelf: boolean
+  unit?: string
 }
 
 interface TrendData {
@@ -150,17 +151,56 @@ interface VisibilityData {
   }
 }
 
-const resolveSelfBrandKey = (data: any): string => {
+const resolveSelfBrandKey = (data: any, productKey?: string): string => {
   if (!data) {
     return SELF_BRAND_CANDIDATES[0]
   }
+  
+  const mentionRateKeys = Object.keys(data.mention_rate || {})
+  const combinedScoreKeys = Object.keys(data.combined_score || {})
+  const allKeys = [...new Set([...mentionRateKeys, ...combinedScoreKeys])]
+  
+  // 如果提供了产品键名，尝试从产品键名中提取品牌名称
+  if (productKey) {
+    let brandFromKey = ""
+    if (productKey.includes("|")) {
+      brandFromKey = productKey.split("|")[0].trim()
+    } else if (productKey.includes("_")) {
+      // 格式: "中国信托_ctbc_财富管理与投资服务"
+      brandFromKey = productKey.split("_")[0].trim()
+    } else {
+      brandFromKey = productKey
+    }
+    
+    // 先尝试精确匹配
+    if (allKeys.includes(brandFromKey)) {
+      return brandFromKey
+    }
+    
+    // 尝试模糊匹配
+    const matchingKey = allKeys.find(key => 
+      key.toLowerCase().includes(brandFromKey.toLowerCase()) || 
+      brandFromKey.toLowerCase().includes(key.toLowerCase())
+    )
+    if (matchingKey) {
+      return matchingKey
+    }
+  }
+  
+  // 使用默认候选列表
   for (const candidate of SELF_BRAND_CANDIDATES) {
-    if (data.mention_rate?.[candidate] !== undefined || data.combined_score?.[candidate] !== undefined) {
+    if (allKeys.includes(candidate)) {
       return candidate
     }
   }
-  const firstKey = Object.keys(data.mention_rate || data.combined_score || {})[0]
-  return firstKey || SELF_BRAND_CANDIDATES[0]
+  
+  // 如果仍然没有找到，返回第一个品牌（作为后备）
+  if (allKeys.length > 0) {
+    console.warn(`[Visibility API] Could not find self brand in candidates, using first brand: ${allKeys[0]}`)
+    return allKeys[0]
+  }
+  
+  return SELF_BRAND_CANDIDATES[0]
 }
 
 const getModelData = (dayData: any, modelKey: string) => {
@@ -169,6 +209,11 @@ const getModelData = (dayData: any, modelKey: string) => {
     return dayData.overall
   }
   return dayData[modelKey] || dayData.overall
+}
+
+// Helper function to sort Map entries by value (descending)
+const sortEntries = (map: Map<string, number>): [string, number][] => {
+  return Array.from(map.entries()).sort((a, b) => b[1] - a[1])
 }
 
 export async function GET(request: Request) {
@@ -201,8 +246,10 @@ export async function GET(request: Request) {
     const allData = JSON.parse(fileContents)
     
     // 确定要使用的产品名称
-    // 新格式: "品牌名 (英文名) | 产品名"
-    let productName = "英业达 (Inventec) | 笔记本电脑代工" // 默认产品
+    // 新格式: "品牌名 (英文名) | 产品名" 或 "品牌名_ctbc_产品名"
+    // 默认使用数据文件中的第一个产品
+    const availableProducts = Object.keys(allData)
+    let productName = availableProducts.length > 0 ? availableProducts[0] : "中国信托_ctbc_财富管理与投资服务" // 默认产品
     
     // 如果提供了productId，尝试从产品数据中获取产品名称
     if (productId) {
@@ -222,13 +269,35 @@ export async function GET(request: Request) {
             const productNameFromAPI = productData.product.name
             const brandName = productData.product.brand?.name || "英业达 (Inventec)"
             
-            // 构建新格式的键名: "品牌名 | 产品名"
+            // 构建新格式的键名: "品牌名 | 产品名" 或 "品牌名_ctbc_产品名"
             if (productNameFromAPI.includes("|")) {
               productName = productNameFromAPI
+            } else if (productNameFromAPI.includes("_")) {
+              productName = productNameFromAPI
             } else if (productNameFromAPI.includes(brandName)) {
-              productName = productNameFromAPI.replace(/\s+/, " | ")
+              const withPipe = productNameFromAPI.replace(/\s+/, " | ")
+              const withUnderscore = productNameFromAPI.replace(/\s+/g, "_")
+              
+              if (allData[withPipe]) {
+                productName = withPipe
+              } else if (allData[withUnderscore]) {
+                productName = withUnderscore
             } else {
-              productName = `${brandName} | ${productNameFromAPI}`
+                productName = withPipe
+              }
+            } else {
+              const withPipe = `${brandName} | ${productNameFromAPI}`
+              const brandNameUnderscore = brandName.replace(/\s+/g, "_").replace(/[()]/g, "")
+              const productNameUnderscore = productNameFromAPI.replace(/\s+/g, "_")
+              const withUnderscore = `${brandNameUnderscore}_${productNameUnderscore}`
+              
+              if (allData[withPipe]) {
+                productName = withPipe
+              } else if (allData[withUnderscore]) {
+                productName = withUnderscore
+              } else {
+                productName = withPipe
+              }
             }
             
             console.log(`[Visibility API] Using product: ${productName} for productId: ${productId}`)
@@ -256,6 +325,24 @@ export async function GET(request: Request) {
         productData = allData[matchingKey]
         console.log(`[Visibility API] Found matching product key: ${matchingKey}`)
       }
+    } else if (!productData && productName.includes("_")) {
+      // 尝试匹配下划线格式的键
+      const [brandPart, productPart] = productName.split("_").map(s => s.trim())
+      const matchingKey = Object.keys(allData).find(key => {
+        return key.includes(brandPart) && key.includes(productPart)
+      })
+      if (matchingKey) {
+        productName = matchingKey
+        productData = allData[matchingKey]
+        console.log(`[Visibility API] Found matching product key: ${matchingKey}`)
+      }
+    }
+    
+    // 如果仍然没有找到，使用第一个可用产品
+    if (!productData && availableProducts.length > 0) {
+      productName = availableProducts[0]
+      productData = allData[productName]
+      console.log(`[Visibility API] Using first available product: ${productName}`)
     }
 
     if (!productData || productData.length === 0) {
@@ -314,6 +401,9 @@ export async function GET(request: Request) {
         const latestOverall = latestData.overall
         const currentScores = latestOverall.combined_score || {}
         
+        // 确定本品牌键名
+        const selfBrandKey = resolveSelfBrandKey(latestOverall, productName)
+        
         // 计算当前排名
         const currentRanking = Object.entries(currentScores)
           .map(([name, score]) => ({ name, score: score as number }))
@@ -323,30 +413,11 @@ export async function GET(request: Request) {
             value: parseFloat((item.score * 100).toFixed(2)), // 转换为百分比
             delta: 0,
             rank: index + 1,
-            isSelf: item.name === "英业达",
+            isSelf: item.name === selfBrandKey,
           }))
 
-        // 计算排名变化（如果有前一天数据）
-        if (previousDayData && previousDayData.combined_score) {
-          const previousScores = previousDayData.combined_score
-          const previousRanking = Object.entries(previousScores)
-            .map(([name, score]) => ({ name, score: score as number }))
-            .sort((a, b) => b.score - a.score)
-          
-          ranking = currentRanking.map((item) => {
-            const brandName = item.brand
-            const previousRankIndex = previousRanking.findIndex(p => p.name === brandName)
-            const previousRank = previousRankIndex !== -1 ? previousRankIndex + 1 : currentRanking.length + 1
-            const rankDelta = previousRank - item.rank // 排名变化：上升为正
-            
-            return {
-              ...item,
-              delta: parseFloat(rankDelta.toFixed(0)),
-            }
-          })
-        } else {
-          ranking = currentRanking
-        }
+        // 因为没有前七天的数据，所有delta都设为0
+        ranking = currentRanking
 
         // 趋势数据 - 1day模式：显示最后两天（11.4和11.5），如果数据不足2天则显示所有可用数据
         const dataForTrend = filteredData.slice(-Math.min(2, filteredData.length))
@@ -367,18 +438,38 @@ export async function GET(request: Request) {
           trends.push(trendPoint)
         })
       } else {
-        // 多天模式：计算平均值
+        // 多天模式：计算平均值，使用所有天出现的所有品牌
+        // 确定本品牌键名（使用第一天的数据）
+        const firstDayData = filteredData[0]?.[1]
+        const firstDayOverall = firstDayData?.overall
+        const selfBrandKey = resolveSelfBrandKey(firstDayOverall, productName)
+        
+        // 获取所有天出现的所有品牌（不限制为第一天的品牌列表）
+        const allBrandsAcrossDays = new Set<string>()
+        filteredData.forEach(([date, data]: [string, any]) => {
+          const dayOverall = data.overall
+          const dayScores = dayOverall.combined_score || {}
+          Object.keys(dayScores).forEach(name => {
+            allBrandsAcrossDays.add(name)
+          })
+        })
+        
+        console.log(`[Visibility API] calculateVisibilityRanking (multi-day) - all brands across all days: ${allBrandsAcrossDays.size}`)
+        
         const scoresAccumulator: Record<string, number[]> = {}
         
         filteredData.forEach(([date, data]: [string, any]) => {
           const dayOverall = data.overall
           const dayScores = dayOverall.combined_score || {}
           
+          // 使用所有天出现的所有品牌（不限制为第一天的品牌列表）
           Object.keys(dayScores).forEach((brandName) => {
-            if (!scoresAccumulator[brandName]) {
-              scoresAccumulator[brandName] = []
+            if (dayScores[brandName] !== undefined) {
+              if (!scoresAccumulator[brandName]) {
+                scoresAccumulator[brandName] = []
+              }
+              scoresAccumulator[brandName].push(dayScores[brandName] as number)
             }
-            scoresAccumulator[brandName].push(dayScores[brandName] as number)
           })
         })
 
@@ -395,7 +486,7 @@ export async function GET(request: Request) {
           value: parseFloat((item.score * 100).toFixed(2)),
           delta: 0, // 多天模式暂时不计算delta
           rank: index + 1,
-          isSelf: item.name === "英业达",
+          isSelf: item.name === selfBrandKey,
         }))
 
         // 趋势数据
@@ -420,7 +511,7 @@ export async function GET(request: Request) {
       return { ranking, trends }
     }
 
-    // 2. Reach Ranking (基于mention_rate)
+    // 2. Reach Ranking (基于mention_rate的百分比形式)
     const calculateReachRanking = (): { ranking: RankingItem[]; trends: TrendData[] } => {
       let ranking: RankingItem[] = []
       const trends: TrendData[] = []
@@ -428,7 +519,15 @@ export async function GET(request: Request) {
       if (isOneDayRange) {
         const latestData = filteredData[filteredData.length - 1][1]
         const latestOverall = latestData.overall
+        const selfBrandKey = resolveSelfBrandKey(latestOverall, productName)
         const currentScores = latestOverall.mention_rate || {}
+        
+        console.log(`[Visibility API] calculateReachRanking - selfBrandKey: ${selfBrandKey}`)
+        console.log(`[Visibility API] calculateReachRanking - mention_rate keys count: ${Object.keys(currentScores).length}`)
+        console.log(`[Visibility API] calculateReachRanking - selfBrandKey in mention_rate: ${selfBrandKey in currentScores}`)
+        if (selfBrandKey in currentScores) {
+          console.log(`[Visibility API] calculateReachRanking - selfBrandKey value: ${currentScores[selfBrandKey]}`)
+        }
         
         const currentRanking = Object.entries(currentScores)
           .map(([name, score]) => ({ name, score: score as number }))
@@ -438,29 +537,12 @@ export async function GET(request: Request) {
             value: parseFloat((item.score * 100).toFixed(2)),
             delta: 0,
             rank: index + 1,
-            isSelf: item.name === "英业达",
+            isSelf: item.name === selfBrandKey,
+            unit: "%",
           }))
 
-        if (previousDayData && previousDayData.mention_rate) {
-          const previousScores = previousDayData.mention_rate
-          const previousRanking = Object.entries(previousScores)
-            .map(([name, score]) => ({ name, score: score as number }))
-            .sort((a, b) => b.score - a.score)
-          
-          ranking = currentRanking.map((item) => {
-            const brandName = item.brand
-            const previousRankIndex = previousRanking.findIndex(p => p.name === brandName)
-            const previousRank = previousRankIndex !== -1 ? previousRankIndex + 1 : currentRanking.length + 1
-            const rankDelta = previousRank - item.rank
-            
-            return {
-              ...item,
-              delta: parseFloat(rankDelta.toFixed(0)),
-            }
-          })
-        } else {
-          ranking = currentRanking
-        }
+        // 因为没有前七天的数据，所有delta都设为0
+        ranking = currentRanking
 
         // 趋势数据 - 1day模式：显示最后两天
         const dataForTrend = filteredData.slice(-Math.min(2, filteredData.length))
@@ -480,17 +562,39 @@ export async function GET(request: Request) {
           trends.push(trendPoint)
         })
       } else {
+        // 多天模式：使用所有天出现的所有品牌
+        const firstDayData = filteredData[0]?.[1]
+        const firstDayOverall = firstDayData?.overall
+        const selfBrandKey = resolveSelfBrandKey(firstDayOverall, productName)
+        
+        // 获取所有天出现的所有品牌（不限制为第一天的品牌列表）
+        const allBrandsAcrossDays = new Set<string>()
+        filteredData.forEach(([date, data]: [string, any]) => {
+          const dayOverall = data.overall
+          const dayScores = dayOverall.mention_rate || {}
+          Object.keys(dayScores).forEach(name => {
+            allBrandsAcrossDays.add(name)
+          })
+        })
+        
+        console.log(`[Visibility API] calculateReachRanking (multi-day) - selfBrandKey: ${selfBrandKey}`)
+        console.log(`[Visibility API] calculateReachRanking (multi-day) - all brands across all days: ${allBrandsAcrossDays.size}`)
+        console.log(`[Visibility API] calculateReachRanking (multi-day) - selfBrandKey in allBrandsAcrossDays: ${allBrandsAcrossDays.has(selfBrandKey)}`)
+        
         const scoresAccumulator: Record<string, number[]> = {}
         
         filteredData.forEach(([date, data]: [string, any]) => {
           const dayOverall = data.overall
           const dayScores = dayOverall.mention_rate || {}
           
+          // 使用所有天出现的所有品牌（不限制为第一天的品牌列表）
           Object.keys(dayScores).forEach((brandName) => {
-            if (!scoresAccumulator[brandName]) {
-              scoresAccumulator[brandName] = []
+            if (dayScores[brandName] !== undefined) {
+              if (!scoresAccumulator[brandName]) {
+                scoresAccumulator[brandName] = []
+              }
+              scoresAccumulator[brandName].push(dayScores[brandName] as number)
             }
-            scoresAccumulator[brandName].push(dayScores[brandName] as number)
           })
         })
 
@@ -506,7 +610,8 @@ export async function GET(request: Request) {
           value: parseFloat((item.score * 100).toFixed(2)),
           delta: 0,
           rank: index + 1,
-          isSelf: item.name === "英业达",
+          isSelf: item.name === selfBrandKey,
+          unit: "%",
         }))
 
         filteredData.forEach(([date, data]: [string, any]) => {
@@ -550,6 +655,8 @@ export async function GET(request: Request) {
           return 999
         }
 
+        const selfBrandKey = resolveSelfBrandKey(latestOverall, productName)
+
         const currentRanking = Object.entries(currentRanks)
           .map(([name, rankRaw]) => ({ name, rank: parseRank(rankRaw) }))
           .sort((a, b) => a.rank - b.rank) // 排名越小越好，升序
@@ -558,29 +665,11 @@ export async function GET(request: Request) {
             value: parseFloat(item.rank.toFixed(1)), // 保留小数点
             delta: 0,
             rank: index + 1,
-            isSelf: item.name === "英业达",
+            isSelf: item.name === selfBrandKey,
           }))
 
-        if (previousDayData && previousDayData.absolute_rank) {
-          const previousRanks = previousDayData.absolute_rank
-          const previousRanking = Object.entries(previousRanks)
-            .map(([name, rankRaw]) => ({ name, rank: parseRank(rankRaw) }))
-            .sort((a, b) => a.rank - b.rank)
-          
-          ranking = currentRanking.map((item) => {
-            const brandName = item.brand
-            const previousRankIndex = previousRanking.findIndex(p => p.name === brandName)
-            const previousRank = previousRankIndex !== -1 ? previousRankIndex + 1 : currentRanking.length + 1
-            const rankDelta = previousRank - item.rank
-            
-            return {
-              ...item,
-              delta: parseFloat(rankDelta.toFixed(0)),
-            }
-          })
-        } else {
-          ranking = currentRanking
-        }
+        // 因为没有前七天的数据，所有delta都设为0
+        ranking = currentRanking
 
         // 趋势数据 - 1day模式：显示最后两天
         const dataForTrend = filteredData.slice(-Math.min(2, filteredData.length))
@@ -600,20 +689,40 @@ export async function GET(request: Request) {
           trends.push(trendPoint)
         })
       } else {
+        // 多天模式：使用所有天出现的所有品牌
+        const firstDayData = filteredData[0]?.[1]
+        const firstDayOverall = firstDayData?.overall
+        const selfBrandKey = resolveSelfBrandKey(firstDayOverall, productName)
+        
+        // 获取所有天出现的所有品牌（不限制为第一天的品牌列表）
+        const allBrandsAcrossDays = new Set<string>()
+        filteredData.forEach(([date, data]: [string, any]) => {
+          const dayOverall = data.overall
+          const dayRanks = dayOverall.absolute_rank || {}
+          Object.keys(dayRanks).forEach(name => {
+            allBrandsAcrossDays.add(name)
+          })
+        })
+        
+        console.log(`[Visibility API] calculateRankRanking (multi-day) - all brands across all days: ${allBrandsAcrossDays.size}`)
+        
         const ranksAccumulator: Record<string, number[]> = {}
         
         filteredData.forEach(([date, data]: [string, any]) => {
           const dayOverall = data.overall
           const dayRanks = dayOverall.absolute_rank || {}
           
+          // 使用所有天出现的所有品牌（不限制为第一天的品牌列表）
           Object.keys(dayRanks).forEach((brandName) => {
-            if (!ranksAccumulator[brandName]) {
-              ranksAccumulator[brandName] = []
+            if (dayRanks[brandName] !== undefined) {
+              if (!ranksAccumulator[brandName]) {
+                ranksAccumulator[brandName] = []
+              }
+              const rankValue = typeof dayRanks[brandName] === 'string' 
+                ? parseFloat(dayRanks[brandName].match(/^([\d.]+)/)?.[1] || '999')
+                : (dayRanks[brandName] as number)
+              ranksAccumulator[brandName].push(rankValue)
             }
-            const rankValue = typeof dayRanks[brandName] === 'string' 
-              ? parseFloat(dayRanks[brandName].match(/^([\d.]+)/)?.[1] || '999')
-              : (dayRanks[brandName] as number)
-            ranksAccumulator[brandName].push(rankValue)
           })
         })
 
@@ -629,7 +738,7 @@ export async function GET(request: Request) {
           value: parseFloat(item.rank.toFixed(1)),
           delta: 0,
           rank: index + 1,
-          isSelf: item.name === "英业达",
+          isSelf: item.name === selfBrandKey,
         }))
 
         filteredData.forEach(([date, data]: [string, any]) => {
@@ -663,6 +772,7 @@ export async function GET(request: Request) {
       if (isOneDayRange) {
         const latestData = filteredData[filteredData.length - 1][1]
         const latestOverall = latestData.overall
+        const selfBrandKey = resolveSelfBrandKey(latestOverall, productName)
         const currentScores = latestOverall.content_share || {}
         
         const currentRanking = Object.entries(currentScores)
@@ -673,29 +783,11 @@ export async function GET(request: Request) {
             value: parseFloat((item.score * 100).toFixed(2)),
             delta: 0,
             rank: index + 1,
-            isSelf: item.name === "英业达",
+            isSelf: item.name === selfBrandKey,
           }))
 
-        if (previousDayData && previousDayData.content_share) {
-          const previousScores = previousDayData.content_share
-          const previousRanking = Object.entries(previousScores)
-            .map(([name, score]) => ({ name, score: score as number }))
-            .sort((a, b) => b.score - a.score)
-          
-          ranking = currentRanking.map((item) => {
-            const brandName = item.brand
-            const previousRankIndex = previousRanking.findIndex(p => p.name === brandName)
-            const previousRank = previousRankIndex !== -1 ? previousRankIndex + 1 : currentRanking.length + 1
-            const rankDelta = previousRank - item.rank
-            
-            return {
-              ...item,
-              delta: parseFloat(rankDelta.toFixed(0)),
-            }
-          })
-        } else {
-          ranking = currentRanking
-        }
+        // 因为没有前七天的数据，所有delta都设为0
+        ranking = currentRanking
 
         // 趋势数据 - 1day模式：显示最后两天（11.4和11.5），如果数据不足2天则显示所有可用数据
         const dataForTrend = filteredData.slice(-Math.min(2, filteredData.length))
@@ -716,17 +808,37 @@ export async function GET(request: Request) {
           trends.push(trendPoint)
         })
       } else {
+        // 多天模式：使用所有天出现的所有品牌
+        const firstDayData = filteredData[0]?.[1]
+        const firstDayOverall = firstDayData?.overall
+        const selfBrandKey = resolveSelfBrandKey(firstDayOverall, productName)
+        
+        // 获取所有天出现的所有品牌（不限制为第一天的品牌列表）
+        const allBrandsAcrossDays = new Set<string>()
+        filteredData.forEach(([date, data]: [string, any]) => {
+          const dayOverall = data.overall
+          const dayScores = dayOverall.content_share || {}
+          Object.keys(dayScores).forEach(name => {
+            allBrandsAcrossDays.add(name)
+          })
+        })
+        
+        console.log(`[Visibility API] calculateFocusRanking (multi-day) - all brands across all days: ${allBrandsAcrossDays.size}`)
+        
         const scoresAccumulator: Record<string, number[]> = {}
         
         filteredData.forEach(([date, data]: [string, any]) => {
           const dayOverall = data.overall
           const dayScores = dayOverall.content_share || {}
           
+          // 使用所有天出现的所有品牌（不限制为第一天的品牌列表）
           Object.keys(dayScores).forEach((brandName) => {
-            if (!scoresAccumulator[brandName]) {
-              scoresAccumulator[brandName] = []
+            if (dayScores[brandName] !== undefined) {
+              if (!scoresAccumulator[brandName]) {
+                scoresAccumulator[brandName] = []
+              }
+              scoresAccumulator[brandName].push(dayScores[brandName] as number)
             }
-            scoresAccumulator[brandName].push(dayScores[brandName] as number)
           })
         })
 
@@ -742,7 +854,7 @@ export async function GET(request: Request) {
           value: parseFloat((item.score * 100).toFixed(2)),
           delta: 0,
           rank: index + 1,
-          isSelf: item.name === "英业达",
+          isSelf: item.name === selfBrandKey,
         }))
 
         // 趋势数据
@@ -814,7 +926,7 @@ export async function GET(request: Request) {
         const modelData = getModelData(dayData, modelKey)
         if (!modelData) return
 
-        const selfBrandKey = resolveSelfBrandKey(modelData)
+        const selfBrandKey = resolveSelfBrandKey(modelData, productName)
         if (selfBrandKey) {
           resolvedSelfBrand = selfBrandKey
         }

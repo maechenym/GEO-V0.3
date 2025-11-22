@@ -53,8 +53,8 @@ const navigation: NavItem[] = [
   { title: "Queries", href: "/insights/intent", icon: Target, group: "Insights" },
   // Group C: Settings
   // { title: "Team", href: "/settings/team", icon: Users, group: "Settings" }, // Hidden for now - complex account storage logic
-  { title: "Plan", href: "/settings/plan", icon: TrendingUp, group: "Settings" },
   { title: "Products", href: "/settings/products", icon: Lightbulb, group: "Settings" },
+  { title: "Plan", href: "/settings/plan", icon: TrendingUp, group: "Settings" },
   // Profile moved to bottom user info button
 ]
 
@@ -181,7 +181,7 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
                     {userEmail || translate("Not available", language)}
                   </p>
                   <p className="text-xs text-ink-500">
-                    {translate("Current Plan", language)}: {planDisplayName}
+                    {planDisplayName}
                   </p>
                 </div>
               </button>

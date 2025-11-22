@@ -31,7 +31,7 @@ export function LandingHeader() {
             href="/news"
             className="text-sm font-medium text-ink-700 hover:text-brand-600 transition-colors"
           >
-            News
+            Blog
           </Link>
         </nav>
 

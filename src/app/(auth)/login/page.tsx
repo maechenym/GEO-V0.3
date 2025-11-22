@@ -38,8 +38,9 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (token && profile && profile.hasBrand) {
+      // 只有 test1@example.com 可以进入产品预览
       const email = profile.email
-      if (email === "test1@example.com" || email === "test1@gmail.com") {
+      if (email === "test1@example.com") {
         router.push("/analysis-results")
       } else {
         router.push("/overview")
@@ -68,8 +69,8 @@ export default function LoginPage() {
         // 调用 GET /api/auth/session 拉取 profile.hasBrand
         const profile = await loadProfile()
 
-        // 特殊处理：test1@example.com 或 test1@gmail.com 跳转到分析结果页面
-        if (data.email === "test1@example.com" || data.email === "test1@gmail.com") {
+        // 特殊处理：只有 test1@example.com 跳转到分析结果页面（产品预览）
+        if (data.email === "test1@example.com") {
           router.push("/analysis-results")
           return
         }

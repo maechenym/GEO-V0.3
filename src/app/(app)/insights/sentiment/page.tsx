@@ -511,14 +511,15 @@ export default function SentimentPage() {
     }
   }, [kpis.avgSentiment, kpis.negative, kpis.neutral, kpis.positive, previousSeriesWindow])
 
+  // 因为没有前七天的数据，所有delta都设为0
   const kpiChanges = useMemo(() => {
     return {
-      avgSentiment: kpis.avgSentiment - previousKpis.avgSentiment,
-      positive: kpis.positive - previousKpis.positive,
-      neutral: kpis.neutral - previousKpis.neutral,
-      negative: kpis.negative - previousKpis.negative,
+      avgSentiment: 0,
+      positive: 0,
+      neutral: 0,
+      negative: 0,
     }
-  }, [kpis, previousKpis])
+  }, [])
 
   const positiveTopicList = useMemo(() => {
     const list = sentimentData?.topics?.positive || []
@@ -757,7 +758,7 @@ export default function SentimentPage() {
           {/* Main Content Grid */}
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 mb-6">
             {/* Left: Sentiment by Source */}
-            <div className="xl:col-span-8 rounded-lg border border-ink-200 bg-white p-5 shadow-subtle hover:shadow-md transition-shadow">
+            <div className="xl:col-span-12 rounded-lg border border-ink-200 bg-white p-5 shadow-subtle hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-semibold text-ink-900">{translate("Sentiment Distribution", language)}</h2>
                 <Tooltip>
@@ -835,9 +836,10 @@ export default function SentimentPage() {
               </div>
             </div>
 
-            {/* Right: Response Themes */}
+            {/* 热门正面/负面回应主题功能暂时隐藏，后续版本会补上 */}
+            {/* Top Positive/Negative Response Themes temporarily hidden, will be added in future version */}
+            {/* 
             <div className="xl:col-span-4 space-y-4">
-              {/* Top Positive Response Themes */}
               <div className="rounded-lg border border-ink-200 bg-white py-6 px-5 shadow-subtle hover:shadow-md transition-shadow">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-sm font-semibold text-ink-900">{translate("Top Positive Response Themes", language)}</h2>
@@ -866,7 +868,6 @@ export default function SentimentPage() {
                 </div>
               </div>
 
-              {/* Top Negative Response Themes */}
               <div className="rounded-lg border border-ink-200 bg-white py-6 px-5 shadow-subtle hover:shadow-md transition-shadow">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-sm font-semibold text-ink-900">{translate("Top Negative Response Themes", language)}</h2>
@@ -885,7 +886,7 @@ export default function SentimentPage() {
                   {negativeTopicList.length > 0 ? (
                     negativeTopicList.map((item, idx) => (
                       <div key={`${item.topic}-${idx}`} className="flex items-center justify-between text-xs">
-                        <span className="text-ink-700 truncate flex-1 mr-2">{translate(item.topic, "en")}</span>
+                        <span className="text-ink-700 truncate flex-1 mr-2">{translate(item.topic, language)}</span>
                         <span className="text-ink-900 font-medium">{Math.round(item.score * 100)}%</span>
                       </div>
                     ))
@@ -895,6 +896,7 @@ export default function SentimentPage() {
                 </div>
               </div>
             </div>
+            */}
           </div>
         </div>
       </div>

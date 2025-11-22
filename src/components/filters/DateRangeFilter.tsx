@@ -15,7 +15,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
+import ReactDatePicker from "react-datepicker"
+import "react-datepicker/dist/react-datepicker.css"
 import { cn } from "@/lib/utils"
 import {
   formatDateShanghai,
@@ -48,19 +49,13 @@ export function DateRangeFilter({
 }: DateRangeFilterProps) {
   const { language } = useLanguageStore()
   const [isOpen, setIsOpen] = useState(false)
-  const [selectedRange, setSelectedRange] = useState<{ from?: Date; to?: Date } | undefined>(() => {
-    return {
-      from: startDate,
-      to: endDate,
-    }
-  })
+  const [selectedStartDate, setSelectedStartDate] = useState<Date | null>(startDate)
+  const [selectedEndDate, setSelectedEndDate] = useState<Date | null>(endDate)
 
   // Update selected range when startDate/endDate change externally
   useEffect(() => {
-    setSelectedRange({
-      from: startDate,
-      to: endDate,
-    })
+    setSelectedStartDate(startDate)
+    setSelectedEndDate(endDate)
   }, [startDate, endDate])
 
   // Calculate current range key
@@ -85,28 +80,49 @@ export function DateRangeFilter({
     ? `${formatDateShanghai(startDate)} ~ ${formatDateShanghai(endDate)}`
     : "Select date range"
 
-  const handleSelect = (range: { from?: Date; to?: Date } | undefined) => {
-    if (!range) return
-    
-    setSelectedRange(range)
-    
-    // If both dates are selected, validate and apply
-    if (range.from && range.to) {
-      const validation = validateDateRange(range.from, range.to, minDate, maxDate)
+  const handleDateRangeChange = (dates: [Date | null, Date | null] | null) => {
+    if (!dates) {
+      setSelectedStartDate(null)
+      setSelectedEndDate(null)
+      return
+    }
+
+    const [start, end] = dates
+    setSelectedStartDate(start)
+    setSelectedEndDate(end)
+
+    // Apply changes when both dates are selected
+    if (start && end) {
+      const validation = validateDateRange(start, end, minDate, maxDate)
       if (validation.valid) {
-        onDateChange(range.from, range.to)
-        setIsOpen(false)
-      }
-    } else if (range.from && !range.to) {
-      // Single day selection
-      const validation = validateDateRange(range.from, range.from, minDate, maxDate)
-      if (validation.valid) {
-        onDateChange(range.from, range.from)
+        onDateChange(start, end)
         setIsOpen(false)
       }
     }
+    // If only start date is selected, keep calendar open
+    // User can click the same date again for single day, or click another date for range
   }
-
+  
+  // Handle single day selection: clicking the same date twice = single day
+  const handleDateSelect = (date: Date) => {
+    // If start date is selected but end date is not
+    if (selectedStartDate && !selectedEndDate) {
+      const startStr = formatDateShanghai(selectedStartDate)
+      const clickedStr = formatDateShanghai(date)
+      
+      // Same date clicked again = single day selection
+      if (startStr === clickedStr) {
+        const validation = validateDateRange(date, date, minDate, maxDate)
+        if (validation.valid) {
+          setSelectedStartDate(date)
+          setSelectedEndDate(date)
+          onDateChange(date, date)
+          setIsOpen(false)
+        }
+      }
+    }
+  }
+  
   const handlePresetChange = (value: string) => {
     if (value === "custom") {
       setIsOpen(true)
@@ -191,16 +207,22 @@ export function DateRangeFilter({
             <div className="mb-2 text-xs text-ink-500 px-2">
               {displayText}
             </div>
-            <Calendar
-              mode="range"
-              selected={selectedRange}
-              onSelect={handleSelect}
-              numberOfMonths={1}
-              disabled={(date) => {
-                if (minDate && date < minDate) return true
-                if (maxDate && date > maxDate) return true
-                return false
+            <ReactDatePicker
+              selected={selectedStartDate || undefined}
+              onChange={handleDateRangeChange}
+              startDate={selectedStartDate || undefined}
+              endDate={selectedEndDate || undefined}
+              selectsRange
+              minDate={minDate}
+              maxDate={maxDate}
+              dateFormat="yyyy-MM-dd"
+              inline
+              filterDate={(date: Date) => {
+                if (minDate && date < minDate) return false
+                if (maxDate && date > maxDate) return false
+                return true
               }}
+              onSelect={handleDateSelect}
             />
           </div>
         </PopoverContent>

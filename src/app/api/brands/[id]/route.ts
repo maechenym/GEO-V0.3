@@ -15,20 +15,24 @@ export async function GET(
   const id = resolvedParams.id
 
   // Mock brand data for 英业达
+  // TODO: 从数据库获取品牌信息，包括 brandCategory（产业）
   if (id === "brand_inventec") {
     return NextResponse.json({
       brand: {
         id: "brand_inventec",
         name: "英业达 (Inventec)",
+        brandCategory: "technology", // 从用户注册时填写的数据中获取
       },
     })
   }
 
   // Default brand for other IDs
+  // TODO: 从数据库获取品牌信息，包括 brandCategory（产业）
   return NextResponse.json({
     brand: {
       id: id,
       name: "Brand",
+      brandCategory: null, // 从用户注册时填写的数据中获取
     },
   })
 }

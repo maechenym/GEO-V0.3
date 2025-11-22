@@ -13,7 +13,7 @@ import type {
 } from "@/types/sentiment"
 import { getDomainCategory } from "@/lib/source-categories"
 
-const SELF_BRAND_CANDIDATES = ["英业达", "Inventec"]
+const SELF_BRAND_CANDIDATES = ["中国信托", "中國信託", "CTBC", "ctbc", "英业达", "Inventec"]
 
 const MODEL_KEY_MAP: Record<string, string> = {
   all: "overall",
@@ -28,16 +28,53 @@ const getModelKey = (modelParam: string | null): string => {
   return MODEL_KEY_MAP[normalized] || "overall"
 }
 
-const resolveSelfBrandKey = (source: any): string => {
+const resolveSelfBrandKey = (source: any, productKey?: string): string => {
   if (!source || typeof source !== "object") {
     return SELF_BRAND_CANDIDATES[0]
   }
+  
   const mentionRateKeys = Object.keys(source.mention_rate || {})
+  
+  // 如果提供了产品键名，尝试从产品键名中提取品牌名称
+  if (productKey) {
+    let brandFromKey = ""
+    if (productKey.includes("|")) {
+      brandFromKey = productKey.split("|")[0].trim()
+    } else if (productKey.includes("_")) {
+      // 格式: "中国信托_ctbc_财富管理与投资服务"
+      brandFromKey = productKey.split("_")[0].trim()
+    } else {
+      brandFromKey = productKey
+    }
+    
+    // 先尝试精确匹配
+    if (mentionRateKeys.includes(brandFromKey)) {
+      return brandFromKey
+    }
+    
+    // 尝试模糊匹配
+    const matchingKey = mentionRateKeys.find(key => 
+      key.toLowerCase().includes(brandFromKey.toLowerCase()) || 
+      brandFromKey.toLowerCase().includes(key.toLowerCase())
+    )
+    if (matchingKey) {
+      return matchingKey
+    }
+  }
+  
+  // 使用默认候选列表
   for (const candidate of SELF_BRAND_CANDIDATES) {
     if (mentionRateKeys.includes(candidate)) {
       return candidate
     }
   }
+  
+  // 如果仍然没有找到，返回第一个品牌（作为后备）
+  if (mentionRateKeys.length > 0) {
+    console.warn(`[Sentiment API] Could not find self brand in candidates, using first brand: ${mentionRateKeys[0]}`)
+    return mentionRateKeys[0]
+  }
+  
   return SELF_BRAND_CANDIDATES[0]
 }
 
@@ -199,6 +236,11 @@ export async function GET(request: Request) {
 
     console.log(`[Sentiment API] Processing data - days: ${dateRangeDays}, isOneDayRange: ${isOneDayRange}`)
 
+    // 确定本品牌键名
+    const latestData = filteredData[filteredData.length - 1][1]
+    const modelDataForBrand = getModelData(latestData, modelKey)
+    const selfBrandKey = resolveSelfBrandKey(modelDataForBrand || {}, productName)
+
     // Calculate KPIs
     let kpis: SentimentKPIs
     
@@ -208,13 +250,13 @@ export async function GET(request: Request) {
       const modelData = getModelData(latestData, modelKey)
       
       // SOV: based on total_score
-      const inventecTotalScore = modelData.total_score?.["英业达"] || 0
+      const inventecTotalScore = modelData.total_score?.[selfBrandKey] || 0
       const allTotalScores = Object.values(modelData.total_score || {}) as number[]
       const totalScoreSum = allTotalScores.reduce((sum, score) => sum + score, 0)
       const sov = totalScoreSum > 0 ? (inventecTotalScore / totalScoreSum) * 100 : 0
       
       // Sentiment Index: 直接使用sentiment_score（0-1范围），与overview一致
-      const inventecSentimentScore = modelData.sentiment_score?.["英业达"] || 0
+      const inventecSentimentScore = modelData.sentiment_score?.[selfBrandKey] || 0
       const sentimentIndex = inventecSentimentScore
       
       const breakdown = getSentimentBreakdown(inventecSentimentScore)
@@ -239,7 +281,7 @@ export async function GET(request: Request) {
         const dayModelData = getModelData(data, modelKey)
         
         // SOV
-        const inventecTotalScore = dayModelData.total_score?.["英业达"] || 0
+        const inventecTotalScore = dayModelData.total_score?.[selfBrandKey] || 0
         const allTotalScores = Object.values(dayModelData.total_score || {}) as number[]
         const totalScoreSum = allTotalScores.reduce((sum, score) => sum + score, 0)
         if (totalScoreSum > 0) {
@@ -247,7 +289,7 @@ export async function GET(request: Request) {
         }
         
         // Sentiment Index: 直接使用sentiment_score（0-1范围），与overview一致
-        const inventecSentimentScore = dayModelData.sentiment_score?.["英业达"] || 0
+        const inventecSentimentScore = dayModelData.sentiment_score?.[selfBrandKey] || 0
         sentimentIndexSum += inventecSentimentScore
         
         const breakdown = getSentimentBreakdown(inventecSentimentScore)
@@ -415,7 +457,7 @@ export async function GET(request: Request) {
           value: parseFloat(finalScore.toFixed(4)), // 保持0-1范围，与overview一致
           delta: rankDelta,
           rank: currentRank,
-          isSelf: comp.name === "英业达",
+          isSelf: comp.name === selfBrandKey,
         }
       })
       
@@ -537,7 +579,7 @@ export async function GET(request: Request) {
           value: parseFloat(finalScore.toFixed(4)), // 保持0-1范围，与overview一致
           delta: rankDelta, // Rank change for multi-day mode
           rank: currentRank,
-          isSelf: comp.name === "英业达",
+          isSelf: comp.name === selfBrandKey,
         }
       })
       
@@ -549,8 +591,8 @@ export async function GET(request: Request) {
     }
 
     // Extract risk topics from aggregated_sentiment_detail (从所有品牌中提取)
+    // Note: selfBrandKey is already defined at line 242, reuse it here
     const riskTopics: RiskTopic[] = []
-    const selfBrandKey = resolveSelfBrandKey(getModelData(filteredData[0]?.[1], modelKey) || {})
     
     // Collect all positive and negative aspects from all brands and all days
     const positiveAspectsMap = new Map<string, { count: number; brand: string; domains: string[] }>()

@@ -80,9 +80,18 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
   const { setDirty } = useBrandUIStore()
   const { language } = useLanguageStore()
   const { profile } = useAuthStore()
-  const isTestAccount = profile?.email === "test@example.com"
+  // 只有 test1@example.com 可以进入产品预览，不受产品数量限制
+  const isTestAccount = profile?.email === "test1@example.com"
   const maxProducts = isTestAccount ? Infinity : getMaxProducts()
   const canAddMore = isTestAccount || products.length < maxProducts
+  
+  // 根据计划限制只显示允许的产品数量
+  const displayProducts = isTestAccount 
+    ? products 
+    : products.slice(0, maxProducts)
+  
+  // 检查是否已达到计划限制（用于显示升级提示）
+  const hasReachedLimit = !isTestAccount && products.length >= maxProducts
 
   const createProductMutation = useCreateProduct(brandId)
   const updateProductMutation = useUpdateProduct(brandId)
@@ -112,6 +121,13 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
   })
 
   const handleAddProduct = async (data: ProductForm) => {
+    // 检查是否已达到计划限制
+    if (hasReachedLimit) {
+      // 如果已达到限制，不执行添加操作
+      // 可以在这里显示错误提示或升级提示
+      return
+    }
+    
     const normalizedData: ProductForm = {
       name: sanitizeProductName(data.name),
       category: data.category?.trim() || "",
@@ -163,14 +179,13 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
             <p className="text-sm text-muted-foreground">
               {isTestAccount
                 ? `${products.length} ${translate("products", language)}`
-                : `${products.length} / ${maxProducts} ${translate("products", language)}`}
+                : `${displayProducts.length} / ${maxProducts} ${translate("products", language)}`}
             </p>
           </div>
           <Button
             variant="outline"
             size="sm"
             onClick={() => setAddDialogOpen(true)}
-            disabled={!canAddMore}
             aria-label="Add new product"
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -178,15 +193,7 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
           </Button>
         </div>
 
-        {!canAddMore && (
-          <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-4">
-            <p className="text-sm text-destructive">
-              Upgrade plan to add more products (current limit: {maxProducts})
-            </p>
-          </div>
-        )}
-
-        {products.length === 0 ? (
+        {displayProducts.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             <p>{translate("No products yet. Click \"Add Product\" to get started.", language)}</p>
           </div>
@@ -216,7 +223,7 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {products.map((product) => (
+                {displayProducts.map((product) => (
                   <tr key={product.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4" aria-label={`Product: ${product.name}`}>
                       {editId === product.id ? (
@@ -307,6 +314,15 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
             <DialogDescription>{translate("Add a new product to track", language)}</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit(handleAddProduct)} className="space-y-4">
+            {/* 如果已达到限制，显示升级提示 */}
+            {hasReachedLimit && (
+              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+                <p className="text-sm text-destructive">
+                  {translate("Upgrade plan to add more products", language)} ({translate("current limit", language)}: {maxProducts})
+                </p>
+              </div>
+            )}
+            
             <div className="space-y-2">
               <Label htmlFor="product-name">
                 {translate("Product Name", language)} <span className="text-destructive">*</span>
@@ -315,9 +331,10 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
                 id="product-name"
                 {...register("name")}
                 placeholder="Enter product name"
-                className={errors.name ? "border-destructive" : ""}
+                className={errors.name ? "border-destructive w-full" : "w-full"}
                 aria-invalid={!!errors.name}
                 aria-describedby={errors.name ? "product-name-error" : undefined}
+                disabled={hasReachedLimit}
               />
               <FormMessage message={errors.name?.message} variant="error" />
             </div>
@@ -329,6 +346,7 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
                 id="product-category"
                 {...register("category")}
                 placeholder="e.g., SaaS, Hardware, Software"
+                disabled={hasReachedLimit}
               />
             </div>
             <DialogFooter>
@@ -340,11 +358,11 @@ export function ProductListCard({ products, brandId }: ProductListCardProps) {
                   reset()
                 }}
               >
-                Cancel
+                {translate("Cancel", language)}
               </Button>
               <Button
                 type="submit"
-                disabled={createProductMutation.isPending}
+                disabled={createProductMutation.isPending || hasReachedLimit}
                 aria-label="Add product"
               >
                 {createProductMutation.isPending ? translate("Adding...", language) : translate("Add Product", language)}

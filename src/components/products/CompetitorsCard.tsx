@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Plus, Trash2, Pencil, Check, X } from "lucide-react"
+import { Plus, Trash2, Pencil, Check, X, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -89,6 +89,18 @@ export function CompetitorsCard({ competitors, brandId, productId }: Competitors
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [editingCompetitor, setEditingCompetitor] = useState<Competitor | null>(null)
   const isSubmittingRef = useRef(false)
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const competitorsPerPage = 10 // 每页显示10个竞品
+  
+  // Debug: Log competitorsPerPage to ensure it's correct
+  console.log("[CompetitorsCard] competitorsPerPage:", competitorsPerPage)
+  
+  // Reset to page 1 when competitors list changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [competitors.length])
 
   const {
     register,
@@ -197,26 +209,69 @@ export function CompetitorsCard({ competitors, brandId, productId }: Competitors
             <p>{translate("No competitors yet. Click \"Add Competitor\" to get started.", language)}</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th
-                    className="px-6 py-4 text-left text-sm font-semibold text-gray-900 border-b border-gray-200"
-                    aria-label="Competitor name"
-                  >
-                    {translate("Competitors", language)}
-                  </th>
-                  <th
-                    className="px-6 py-4 text-right text-sm font-semibold text-gray-900 border-b border-gray-200"
-                    aria-label="Actions"
-                  >
-                    {translate("Actions", language)}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {competitors.map((competitor) => (
+          <>
+            {/* Calculate pagination */}
+            {(() => {
+              const totalPages = Math.ceil(competitors.length / competitorsPerPage)
+              const startIndex = (currentPage - 1) * competitorsPerPage
+              const endIndex = startIndex + competitorsPerPage
+              const paginatedCompetitors = competitors.slice(startIndex, endIndex)
+              
+              console.log("[CompetitorsCard] Component rendered with:", {
+                competitorsLength: competitors.length,
+                competitorsPerPage,
+                totalPages,
+                currentPage,
+                startIndex,
+                endIndex,
+                paginatedCount: paginatedCompetitors.length,
+              })
+              
+              // Debug logging
+              console.log("[CompetitorsCard] Pagination:", {
+                totalCompetitors: competitors.length,
+                competitorsPerPage,
+                totalPages,
+                currentPage,
+                startIndex,
+                endIndex,
+                paginatedCount: paginatedCompetitors.length,
+                actualDisplayed: paginatedCompetitors.length,
+                expectedDisplayed: Math.min(competitorsPerPage, competitors.length - startIndex),
+              })
+              
+              // Verify pagination is working correctly
+              if (paginatedCompetitors.length !== Math.min(competitorsPerPage, competitors.length - startIndex) && currentPage === 1) {
+                console.warn("[CompetitorsCard] Pagination mismatch! Expected", Math.min(competitorsPerPage, competitors.length - startIndex), "but got", paginatedCompetitors.length)
+              }
+              
+              // Reset to page 1 if current page is out of range
+              if (currentPage > totalPages && totalPages > 0) {
+                setCurrentPage(1)
+              }
+              
+              return (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th
+                            className="px-6 py-4 text-left text-sm font-semibold text-gray-900 border-b border-gray-200"
+                            aria-label="Competitor name"
+                          >
+                            {translate("Competitors", language)}
+                          </th>
+                          <th
+                            className="px-6 py-4 text-right text-sm font-semibold text-gray-900 border-b border-gray-200"
+                            aria-label="Actions"
+                          >
+                            {translate("Actions", language)}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {paginatedCompetitors.map((competitor) => (
                   <tr key={competitor.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4" aria-label={`Competitor: ${competitor.name}`}>
                       {editId === competitor.id ? (
@@ -314,11 +369,49 @@ export function CompetitorsCard({ competitors, brandId, productId }: Competitors
                         </div>
                       )}
                     </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  {/* Pagination Controls - Always show if there are competitors */}
+                  {competitors.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-muted-foreground">
+                          {translate("Showing", language)} {startIndex + 1}-{Math.min(endIndex, competitors.length)} {translate("of", language)} {competitors.length} {translate("competitors", language)}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            className="h-8 w-8 p-0"
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </Button>
+                          <div className="flex items-center gap-2 px-3 text-sm text-gray-700">
+                            <span>{currentPage} / {totalPages}</span>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                            className="h-8 w-8 p-0"
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )
+            })()}
+          </>
         )}
       </div>
 

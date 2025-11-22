@@ -9,7 +9,7 @@ import { ProductListCard } from "@/components/products/ProductListCard"
 import { CompetitorsCard } from "@/components/products/CompetitorsCard"
 import { ProductSelectorCard } from "@/components/products/ProductSelectorCard"
 import { UnsavedChangesGuard } from "@/components/common/UnsavedChangesGuard"
-import { useBrand, useProducts, useCompetitorsByProduct, useUpdateBrand } from "@/hooks/use-products"
+import { useBrand, useProducts, useCompetitors, useCompetitorsByProduct, useUpdateBrand } from "@/hooks/use-products"
 import { useQueryClient } from "@tanstack/react-query"
 import { useToast } from "@/hooks/use-toast"
 import { translate } from "@/lib/i18n"
@@ -42,9 +42,41 @@ export default function ProductsSettingsPage() {
   // Get selected product ID from store
   const { selectedProductId } = useBrandUIStore()
   
-  // Fetch competitors based on selected product
-  const { data: competitorsData, isLoading: competitorsLoading } = useCompetitorsByProduct(selectedProductId)
-  const competitors = competitorsData?.competitors || []
+  // Always fetch both product-level and brand-level competitors
+  const { data: competitorsByProductData, isLoading: competitorsByProductLoading } = useCompetitorsByProduct(selectedProductId)
+  const { data: competitorsByBrandData, isLoading: competitorsByBrandLoading } = useCompetitors(selectedBrandId)
+  
+  // Use product-level competitors if product is selected and has competitors, otherwise use brand-level competitors
+  const productCompetitors = competitorsByProductData?.competitors || []
+  const brandCompetitors = competitorsByBrandData?.competitors || []
+  
+  const competitors = selectedProductId && productCompetitors.length > 0
+    ? productCompetitors
+    : brandCompetitors
+  const competitorsLoading = selectedProductId 
+    ? (competitorsByProductLoading || competitorsByBrandLoading)
+    : competitorsByBrandLoading
+
+  // Debug logging
+  console.log("[Products Settings] Competitors data:", {
+    selectedProductId,
+    selectedBrandId,
+    competitorsByProduct: productCompetitors.length,
+    competitorsByBrand: brandCompetitors.length,
+    finalCompetitors: competitors.length,
+    competitorsLoading,
+    usingProductLevel: selectedProductId && productCompetitors.length > 0,
+  })
+  
+  // Check if target banks are in the list
+  const targetBanks = ["国泰世华银行", "玉山银行", "台新银行", "國泰世華銀行", "玉山銀行", "台新銀行"]
+  const foundBanks = competitors.filter(c => targetBanks.includes(c.name))
+  if (foundBanks.length > 0) {
+    console.log("[Products Settings] Target banks found:", foundBanks.map(c => c.name))
+  } else {
+    console.log("[Products Settings] Target banks NOT found in competitors list")
+    console.log("[Products Settings] First 20 competitors:", competitors.slice(0, 20).map(c => c.name))
+  }
 
   const handleSaveAllChanges = async () => {
     if (!selectedBrandId || !isDirty) return
@@ -131,15 +163,50 @@ export default function ProductsSettingsPage() {
               <>
                 {/* Brand and Product Selector Row */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {/* Brand Name Display */}
+                  {/* 卡片1: 品牌信息 */}
                   <div className="rounded-lg border border-gray-200 bg-white p-5">
-                    <h2 className="text-sm font-semibold text-gray-900 mb-4">{translate("Brand", language)}</h2>
-                      <div className="text-base font-medium text-gray-900">
-                        {translate(selectedBrand.name || "英业达", language)}
+                    <h2 className="text-sm font-semibold text-gray-900 mb-4">{translate("Brand Information", language)}</h2>
+                    <div className="space-y-4">
+                      {/* 品牌 */}
+                      <div className="space-y-2">
+                        <div className="text-xs font-medium text-gray-500">
+                          {translate("Brand", language)}
+                        </div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {translate(selectedBrand.name || "英业达", language)}
+                        </div>
+                      </div>
+                      {/* 产业 */}
+                      <div className="space-y-2">
+                        <div className="text-xs font-medium text-gray-500">
+                          {translate("Industry", language)}
+                        </div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {(() => {
+                            const industry = (selectedBrand as any)?.brandCategory || (selectedBrand as any)?.industry || ""
+                            if (!industry) return "—"
+                            // 产业选项映射
+                            const industryLabels: Record<string, { zh: string; en: string }> = {
+                              technology: { zh: "科技", en: "Technology" },
+                              finance: { zh: "金融", en: "Finance" },
+                              manufacturing: { zh: "制造业", en: "Manufacturing" },
+                              retail: { zh: "零售", en: "Retail" },
+                              healthcare: { zh: "医疗健康", en: "Healthcare" },
+                              education: { zh: "教育", en: "Education" },
+                              other: { zh: "其他", en: "Other" },
+                            }
+                            const label = industryLabels[industry]
+                            if (label) {
+                              return language === "zh-TW" ? label.zh : label.en
+                            }
+                            return industry
+                          })()}
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Product Selector */}
+                  {/* 卡片2: 产品信息 */}
                   <ProductSelectorCard brandId={selectedBrand.id} />
                 </div>
 
