@@ -882,6 +882,8 @@ const chineseToEnglish: Record<string, string> = {
   "辉立资本": "Phillip Capital",
   "平安银行": "Ping An Bank",
   "渣打银行": "Standard Chartered Bank",
+  "中国工商银行": "ICBC",
+  "中國工商銀行": "ICBC",
   "工银瑞信基金管理": "ICBC Credit Suisse Asset Management",
   "华夏基金": "China Asset Management",
   "海通国际证券": "Haitong International Securities",
