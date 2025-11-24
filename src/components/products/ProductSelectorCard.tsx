@@ -156,19 +156,19 @@ export function ProductSelectorCard({ brandId }: ProductSelectorCardProps) {
         <div className="space-y-2">
           <div className="text-xs font-medium text-gray-500">
             {translate("Product", language)}
-          </div>
-          <Select value={currentProductId} onValueChange={handleProductChange}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder={translate("Select a product", language)} />
-            </SelectTrigger>
-            <SelectContent>
-              {activeProducts.map((product: Product) => (
-                <SelectItem key={product.id} value={product.id}>
-                  {translate(sanitizeProductName(product.name), language)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      </div>
+      <Select value={currentProductId} onValueChange={handleProductChange}>
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder={translate("Select a product", language)} />
+        </SelectTrigger>
+        <SelectContent>
+          {activeProducts.map((product: Product) => (
+            <SelectItem key={product.id} value={product.id}>
+              {translate(sanitizeProductName(product.name), language)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
         </div>
         
         {/* 产品类别 */}

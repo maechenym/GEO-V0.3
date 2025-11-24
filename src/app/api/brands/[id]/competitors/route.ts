@@ -19,7 +19,7 @@ export async function GET(
 
     // 尝试从数据文件读取竞品列表
     const projectRoot = process.cwd()
-    const dataPath = join(projectRoot, "data", "all_products_results_20251114_021851.json")
+    const dataPath = join(projectRoot, "data", "all_products_results_20251120_030450_english.json")
     
     try {
       const fileContent = readFileSync(dataPath, "utf-8")

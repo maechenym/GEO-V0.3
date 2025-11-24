@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import path from "path"
 import { promises as fs } from "fs"
 import { format, subDays } from "date-fns"
-import { toTraditional, translate } from "@/lib/i18n"
+import { toTraditional, translate, translateToEnglish } from "@/lib/i18n"
 import { getDomainCategory } from "@/lib/source-categories"
 
 // 所有标准网站类型（按顺序）
@@ -38,7 +38,7 @@ const TYPE_MAPPING: Record<string, string> = {
   "Other": "Other", // 保持 Other 不变
 }
 
-const SELF_BRAND_CANDIDATES = ["中国信托", "中國信託", "CTBC", "ctbc", "英业达", "Inventec"]
+const SELF_BRAND_CANDIDATES = ["Citi Private Bank", "花旗私人银行", "CTBC", "ctbc", "中国信托", "中國信託", "英业达", "Inventec"]
 const MODEL_KEYS = ["chatgpt", "gemini", "claude"] as const
 
 const slugify = (value: string) =>
@@ -228,7 +228,7 @@ export async function GET(request: Request) {
 
     // 读取JSON文件 - 只使用新文件
     const projectRoot = process.cwd()
-    const dataPath = path.resolve(projectRoot, "data", "all_products_results_20251114_021851.json")
+    const dataPath = path.resolve(projectRoot, "data", "all_products_results_20251120_030450_english.json")
     
     let fileContents: string = ""
     
@@ -1293,11 +1293,50 @@ export async function GET(request: Request) {
     const actualStartDate = format(subDays(new Date(filteredData[0][0]), 1), "yyyy-MM-dd")
     const actualEndDate = format(subDays(new Date(filteredData[filteredData.length - 1][0]), 1), "yyyy-MM-dd")
 
+    // 强制将所有品牌名翻译为英文，并确保本品牌显示为 "CTBC"
+    const translateRanking = (ranking: RankingItem[], selfBrandKey: string) => {
+      return ranking.map(item => {
+        let translatedBrand = translateToEnglish(item.brand)
+        // 如果是本品牌，强制显示为 "CTBC"
+        if (item.isSelf || item.brand === selfBrandKey || translateToEnglish(item.brand) === translateToEnglish(selfBrandKey)) {
+          translatedBrand = "CTBC"
+        }
+        return {
+          ...item,
+          brand: translatedBrand,
+          isSelf: item.isSelf || item.brand === selfBrandKey || translateToEnglish(item.brand) === translateToEnglish(selfBrandKey),
+        }
+      })
+    }
+
+    // 获取本品牌键名（用于翻译）
+    const latestData = filteredData[filteredData.length - 1]?.[1]
+    const latestOverall = latestData?.overall
+    const selfBrandKey = latestOverall ? resolveSelfBrandKey(latestOverall, productName) : SELF_BRAND_CANDIDATES[0]
+
+    // 翻译所有排名数据
+    const translatedVisibility = {
+      ranking: translateRanking(visibility.ranking, selfBrandKey),
+      trends: visibility.trends,
+    }
+    const translatedReach = {
+      ranking: translateRanking(reach.ranking, selfBrandKey),
+      trends: reach.trends,
+    }
+    const translatedRank = {
+      ranking: translateRanking(rank.ranking, selfBrandKey),
+      trends: rank.trends,
+    }
+    const translatedFocus = {
+      ranking: translateRanking(focus.ranking, selfBrandKey),
+      trends: focus.trends,
+    }
+
     const response: VisibilityData = {
-      visibility,
-      reach,
-      rank,
-      focus,
+      visibility: translatedVisibility,
+      reach: translatedReach,
+      rank: translatedRank,
+      focus: translatedFocus,
       heatmap,
       actualDateRange: {
         start: actualStartDate,

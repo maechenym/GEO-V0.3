@@ -21,7 +21,7 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
   // 根据路径确定当前步骤
   const getCurrentStep = () => {
     if (pathname === "/onboarding/brand") {
-      return 1
+    return 1
     } else if (pathname === "/onboarding/waitlist") {
       return 2
     }
@@ -47,7 +47,7 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
             
             {/* 步骤指示器 */}
             <div className="mt-6">
-              <StepIndicator currentStep={currentStep} />
+            <StepIndicator currentStep={currentStep} />
             </div>
           </div>
         </aside>

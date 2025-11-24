@@ -10,7 +10,7 @@ import type {
   OverviewSource,
   OverviewTopic,
 } from "@/types/overview"
-import { toTraditional } from "@/lib/i18n"
+import { toTraditional, translateToEnglish } from "@/lib/i18n"
 
 const MODEL_KEY_MAP: Record<string, string> = {
   all: "overall",
@@ -19,7 +19,7 @@ const MODEL_KEY_MAP: Record<string, string> = {
   claude: "claude",
 }
 
-const SELF_BRAND_CANDIDATES = ["中国信托", "中國信託", "CTBC", "ctbc", "英业达", "Inventec"]
+const SELF_BRAND_CANDIDATES = ["Citi Private Bank", "花旗私人银行", "CTBC", "ctbc", "中国信托", "中國信託", "英业达", "Inventec"]
 
 const getModelKey = (modelParam: string | null): string => {
   if (!modelParam) return "overall"
@@ -255,7 +255,7 @@ export async function GET(request: Request) {
 
     // 读取JSON文件 - 只使用新文件
     const projectRoot = process.cwd()
-    const dataPath = path.resolve(projectRoot, "data", "all_products_results_20251114_021851.json")
+    const dataPath = path.resolve(projectRoot, "data", "all_products_results_20251120_030450_english.json")
     
     let fileContents: string = ""
     
@@ -276,7 +276,7 @@ export async function GET(request: Request) {
     // 新格式: "品牌名 (英文名) | 产品名" 或 "品牌名_ctbc_产品名"
     // 默认使用数据文件中的第一个产品
     const availableProducts = Object.keys(allData)
-    let productName = availableProducts.length > 0 ? availableProducts[0] : "中国信托_ctbc_财富管理与投资服务" // 默认产品
+    let productName = availableProducts.length > 0 ? availableProducts[0] : "CTBC_ctbc_Wealth Management and Investment Services" // 默认产品
     
     // 如果提供了productId，尝试从产品数据中获取产品名称
     if (productId) {
@@ -458,10 +458,10 @@ export async function GET(request: Request) {
       console.log(`[Overview API] 1day mode - Resolved self brand key: "${selfBrandKey}" from product: "${productName}"`)
       
       // Reach: 目标品牌的mention_rate（转换为百分比）
-      const inventecMentionRate = overall.mention_rate?.[selfBrandKey] || 0
-      reach = inventecMentionRate * 100
+      const selfBrandMentionRate = overall.mention_rate?.[selfBrandKey] || 0
+      reach = selfBrandMentionRate * 100
 
-      // Rank: 英业达的absolute_rank
+      // Rank: 本品牌的absolute_rank
       let rankValue: number = 1
       const absoluteRankRaw = overall.absolute_rank?.[selfBrandKey]
       
@@ -866,14 +866,16 @@ export async function GET(request: Request) {
       // 因为没有前七天的数据，所有delta都设为0
       const delta = 0
       
-      // 品牌名显示逻辑：本品牌根据语言显示不同名称，其他品牌保持原样
-      let displayName = comp.name
-      if (comp.name === selfBrandKey) {
-        // 本品牌：保持原始名称，前端会根据语言显示"英业达"或"Inventec"
-        displayName = selfBrandKey
-      }
+      // 品牌名显示逻辑：所有品牌都强制转换为英文
+      let displayName = translateToEnglish(comp.name) // 强制转换为英文
       
-      const isSelf = comp.name === selfBrandKey
+      // 检查是否是本品牌（使用原始名称比较）
+      const isSelf = comp.name === selfBrandKey || translateToEnglish(comp.name) === translateToEnglish(selfBrandKey)
+      
+      // 如果是本品牌，强制显示为 "CTBC"
+      if (isSelf) {
+        displayName = "CTBC"
+      }
       if (isSelf) {
         console.log(`[Overview API] ✓ Marking brand "${comp.name}" as self brand (selfBrandKey: "${selfBrandKey}")`)
       } else if (comp.name.includes('中国信托') || comp.name.includes('中國信託') || comp.name.includes('CTBC')) {
@@ -1032,25 +1034,39 @@ export async function GET(request: Request) {
       console.log(`[Overview API] First 10 competitor names:`, uniqueCompetitors.slice(0, 10).map(c => c.name))
     }
     
-    const translatedRanking = uniqueCompetitors.map((item) => ({
-      ...item,
-      name: language === "zh-TW" ? toTraditional(item.name) : item.name,
-    }))
+    // 强制所有品牌名转换为英文
+    const translatedRanking = uniqueCompetitors.map((item) => {
+      let translatedName = translateToEnglish(item.name) // 强制转换为英文
+      // 如果是本品牌，强制显示为 "CTBC"
+      if (item.isSelf) {
+        translatedName = "CTBC"
+      }
+      return {
+        ...item,
+        name: translatedName,
+      }
+    })
     
+    // 强制所有 sources 转换为英文
     const translatedSources = sources.map((source) => ({
       ...source,
-      domain: language === "zh-TW" ? toTraditional(source.domain) : source.domain,
+      domain: translateToEnglish(source.domain), // 强制转换为英文
     }))
     
+    // 强制所有 topics 转换为英文
     const translatedTopics = topics.map((topic) => ({
       ...topic,
-      topic: language === "zh-TW" ? toTraditional(topic.topic) : topic.topic,
+      topic: translateToEnglish(topic.topic), // 强制转换为英文
     }))
     
-    // 翻译competitorTrends的键名
+    // 翻译competitorTrends的键名（强制转换为英文）
     const translatedCompetitorTrends: Record<string, BrandInfluenceData[]> = {}
     Object.entries(competitorTrends).forEach(([key, value]) => {
-      const translatedKey = language === "zh-TW" ? toTraditional(key) : key
+      let translatedKey = translateToEnglish(key) // 强制转换为英文
+      // 如果是本品牌，强制显示为 "CTBC"
+      if (key === selfBrandKey || translateToEnglish(key) === translateToEnglish(selfBrandKey)) {
+        translatedKey = "CTBC"
+      }
       translatedCompetitorTrends[translatedKey] = value
     })
 

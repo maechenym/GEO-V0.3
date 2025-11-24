@@ -224,18 +224,18 @@ export function BrandForm({ defaultValues, onValuesChange }: BrandFormProps) {
             </p>
             <FormMessage message={errors.productCategory?.message} variant="error" />
           </div>
+          </div>
         </div>
-      </div>
 
       {/* Second Card: Product Name, Industry, and Competitor Brands */}
       <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
         <div className="space-y-5">
           {/* Row 3: Product Name (Optional) */}
-          <div className="space-y-2">
+        <div className="space-y-2">
             <Label htmlFor="specificProduct" className="text-sm font-medium text-foreground">
               Product Name
-            </Label>
-            <Input
+          </Label>
+          <Input
               id="specificProduct"
               placeholder="e.g., Apple Watch Series 9"
               {...register("specificProduct", {
@@ -253,14 +253,14 @@ export function BrandForm({ defaultValues, onValuesChange }: BrandFormProps) {
                   }
                 }
               })}
-            />
+          />
             <p className="text-xs text-muted-foreground leading-relaxed">
               A specific product or model for more detailed tracking. If left blank, we'll use the Product Category above.
-            </p>
-          </div>
+          </p>
+        </div>
 
           {/* Row 4: Industry (Optional) */}
-          <div className="space-y-2">
+        <div className="space-y-2">
             <Label htmlFor="industry" className="text-sm font-medium text-foreground">
               Industry
             </Label>
@@ -296,38 +296,38 @@ export function BrandForm({ defaultValues, onValuesChange }: BrandFormProps) {
               </Label>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 Add specific competitors for targeted competitive insights. We'll also recommend competitors based on your brand information.
-              </p>
-            </div>
-            <div className="space-y-3">
-              {/* Input for adding competitors */}
-              <div className="flex gap-2">
-                <Input
-                  id="competitor-input"
+            </p>
+          </div>
+          <div className="space-y-3">
+            {/* Input for adding competitors */}
+            <div className="flex gap-2">
+              <Input
+                id="competitor-input"
                   placeholder="e.g., Samsung, Garmin"
-                  value={competitorInput}
-                  onChange={(e) => setCompetitorInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault()
-                      handleAddCompetitor()
-                    }
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={handleAddCompetitor}
-                  disabled={!competitorInput.trim()}
-                  className="flex-shrink-0"
-                  title="Add competitor"
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
+                value={competitorInput}
+                onChange={(e) => setCompetitorInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault()
+                    handleAddCompetitor()
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={handleAddCompetitor}
+                disabled={!competitorInput.trim()}
+                className="flex-shrink-0"
+                title="Add competitor"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
 
               {/* Table of added competitors */}
-              {competitors.length > 0 ? (
+            {competitors.length > 0 ? (
                 <div className="overflow-x-auto border border-border rounded-lg">
                   <table className="w-full">
                     <thead className="bg-gray-50">
@@ -341,30 +341,30 @@ export function BrandForm({ defaultValues, onValuesChange }: BrandFormProps) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {competitors.map((competitor, index) => (
+                  {competitors.map((competitor, index) => (
                         <tr key={index} className="hover:bg-gray-50 transition-colors">
                           <td className="px-4 py-3 text-sm text-gray-900">
                             {competitor}
                           </td>
                           <td className="px-4 py-3 text-right">
                             <Button
-                              type="button"
+                        type="button"
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleRemoveCompetitor(index)}
+                        onClick={() => handleRemoveCompetitor(index)}
                               className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8"
-                              aria-label={`Remove ${competitor}`}
-                            >
+                        aria-label={`Remove ${competitor}`}
+                      >
                               <X className="h-4 w-4" />
                             </Button>
                           </td>
                         </tr>
-                      ))}
+                  ))}
                     </tbody>
                   </table>
                 </div>
               ) : null}
-            </div>
+              </div>
           </div>
         </div>
       </div>

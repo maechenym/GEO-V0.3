@@ -145,7 +145,7 @@ export async function GET(request: Request) {
 
     // 读取JSON文件
     const dataDir = path.join(process.cwd(), "data")
-    const dataFilePath = path.join(dataDir, "all_products_results_20251114_021851.json")
+    const dataFilePath = path.join(dataDir, "all_products_results_20251120_030450_english.json")
     
     let fileContents: string
     try {

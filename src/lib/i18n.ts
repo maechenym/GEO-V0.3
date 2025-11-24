@@ -812,6 +812,10 @@ const englishToTraditional: Record<string, string> = {
 // 中文到英文的映射（用于品牌名和 topics）
 const chineseToEnglish: Record<string, string> = {
   // 品牌名
+  "中国信托": "CTBC",
+  "中國信託": "CTBC",
+  "花旗私人银行": "CTBC", // 数据文件中的本品牌，映射为 CTBC
+  "Citi Private Bank": "CTBC", // 英文版本也映射为 CTBC
   "英业达": "Inventec",
   "英業達": "Inventec",
   "惠普": "HP",
@@ -858,6 +862,83 @@ const chineseToEnglish: Record<string, string> = {
   "聞泰科技": "Wingtech",
   "闻泰": "Wingtech",
   "聞泰": "Wingtech",
+  
+  // 金融相关品牌
+  "瑞银集团": "UBS Group",
+  "中金公司": "CICC",
+  "中金财富证券": "CICC Wealth Securities",
+  "花旗私人银行": "Citi Private Bank",
+  "摩根大通私人银行": "JPMorgan Private Bank",
+  "高盛资产管理": "Goldman Sachs Asset Management",
+  "瑞讯集团": "Swissquote Group",
+  "建信信托": "CCB Trust",
+  "中国银行": "Bank of China",
+  "交通银行": "Bank of Communications",
+  "光大银行": "China Everbright Bank",
+  "招商银行": "China Merchants Bank",
+  "伯恩斯坦私人财富管理": "Bernstein Private Wealth Management",
+  "野村控股": "Nomura Holdings",
+  "中金财富管理": "CICC Wealth Management",
+  "辉立资本": "Phillip Capital",
+  "平安银行": "Ping An Bank",
+  "渣打银行": "Standard Chartered Bank",
+  "工银瑞信基金管理": "ICBC Credit Suisse Asset Management",
+  "华夏基金": "China Asset Management",
+  "海通国际证券": "Haitong International Securities",
+  "元大证券": "Yuanta Securities",
+  "国泰证券": "Cathay Securities",
+  "凯基证券": "KGI Securities",
+  "昱成资产管理顾问": "Yucheng Asset Management Advisory",
+  
+  // Topics 相关短语
+  "拥有专业的财富管理团队，为客户提供定制化的资产配置和投资建议。": "Has a professional wealth management team, providing customized asset allocation and investment advice for clients.",
+  "提供涵盖股票、债券、基金、保险、信托、另类投资等多种产品，满足高净值客户": "Provides various products covering stocks, bonds, funds, insurance, trusts, alternative investments, etc., meeting high net worth clients",
+  "提供涵盖股票、债券、基金、保险、信托、另类投资等多种产品，满足高净值客户需求": "Provides various products covering stocks, bonds, funds, insurance, trusts, alternative investments, etc., meeting high net worth clients' needs",
+  
+  // 确保所有可能的品牌名变体都被映射
+  "元大": "Yuanta",
+  "国泰": "Cathay",
+  "凯基": "KGI",
+  "昱成": "Yucheng",
+  "辉立": "Phillip",
+  "华夏": "China Asset Management",
+  "海通": "Haitong",
+  "工银": "ICBC",
+  "渣打": "Standard Chartered",
+  "平安": "Ping An",
+  "招商": "China Merchants",
+  "光大": "China Everbright",
+  "交通": "Bank of Communications",
+  "中国银行": "Bank of China",
+  "建信": "CCB Trust",
+  "野村": "Nomura",
+  "伯恩斯坦": "Bernstein",
+  "星展银行": "DBS Bank",
+  "星展": "DBS",
+  "中国Ping An保险": "Ping An Insurance",
+  "Ping An保险": "Ping An Insurance",
+  "星展私人银行": "DBS Private Bank",
+  "汇丰银行": "HSBC Bank",
+  "汇丰": "HSBC",
+  "妙盈科技": "Mioying Technology",
+  "中信银行": "China CITIC Bank",
+  "中信": "CITIC",
+  "中信建投证券": "CITIC Securities",
+  "凯雷集团": "Carlyle Group",
+  "台中银行PNC金融服务集团": "PNC Financial Services Group",
+  "PNC金融服务集团": "PNC Financial Services Group",
+  "PNC金融": "PNC Financial",
+  "中信信托": "CITIC Trust",
+  "高盛": "Goldman Sachs",
+  "先锋": "Vanguard",
+  "富达投资": "Fidelity Investments",
+  "富达": "Fidelity",
+  "贝莱德": "BlackRock",
+  "Endowus智安投财富管理平台": "Endowus Wealth Management Platform",
+  "智安投": "Endowus",
+  "摩根士丹利": "Morgan Stanley",
+  "台中银行": "Taichung Bank",
+  "台中": "Taichung",
   
   // Topics
   "技术创新": "Technology Innovation",
@@ -999,6 +1080,48 @@ export function translateObject<T extends Record<string, any>>(
     }
   }
   
+  return result
+}
+
+/**
+ * 强制将所有中文数据翻译为英文
+ * 用于前端显示，确保所有数据都是英文
+ */
+export function translateToEnglish(text: string): string {
+  if (!text || typeof text !== "string") {
+    return text
+  }
+
+  // 先检查 chineseToEnglish 映射（精确匹配）
+  if (chineseToEnglish[text]) {
+    return chineseToEnglish[text]
+  }
+
+  // 如果文本已经是英文（不包含中文字符），直接返回
+  if (!/[\u4e00-\u9fa5]/.test(text)) {
+    return text
+  }
+
+  // 对于包含中文的文本，尝试部分匹配和替换
+  // 按长度从长到短排序，优先匹配更长的短语
+  const sortedEntries = Object.entries(chineseToEnglish).sort((a, b) => b[0].length - a[0].length)
+  let result = text
+  for (const [chinese, english] of sortedEntries) {
+    // 转义特殊字符，避免正则表达式错误
+    const escapedChinese = chinese.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    result = result.replace(new RegExp(escapedChinese, 'g'), english)
+  }
+
+  // 如果还有中文字符，尝试从 englishToTraditional 映射中查找英文版本
+  if (/[\u4e00-\u9fa5]/.test(result)) {
+    for (const [key, value] of Object.entries(englishToTraditional)) {
+      if (value === text && key.endsWith("_en")) {
+        return key.replace("_en", "")
+      }
+    }
+  }
+
+  // 如果找不到映射，返回处理后的结果（可能还有中文）
   return result
 }
 

@@ -364,12 +364,12 @@ export default function PlanSettingsPage() {
                   </div>
                 ) : (
                   // 没有订阅时显示所有计划
-                  <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-                    {allPlans.map((plan) => (
-                      <PlanCard key={plan.planId} plan={plan} />
-                    ))}
-                  </div>
-                )}
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                {allPlans.map((plan) => (
+                  <PlanCard key={plan.planId} plan={plan} />
+                ))}
+            </div>
+          )}
               </div>
             </div>
           )}

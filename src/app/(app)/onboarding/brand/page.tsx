@@ -38,7 +38,7 @@ export default function BrandOnboardingPage() {
   // 进入页面时，清空所有缓存数据，确保表单是空的
   useEffect(() => {
     // 无论之前是否有数据，都清空，让用户重新填写
-    reset()
+      reset()
   }, [reset]) // 只在组件挂载时执行一次
 
   // 处理表单值变化

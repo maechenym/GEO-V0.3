@@ -132,7 +132,7 @@ export async function GET(request: Request) {
 
     // 读取JSON文件 - 只使用新文件
     const projectRoot = process.cwd()
-    const dataPath = path.resolve(projectRoot, "data", "all_products_results_20251114_021851.json")
+    const dataPath = path.resolve(projectRoot, "data", "all_products_results_20251120_030450_english.json")
     
     let fileContents: string = ""
     
