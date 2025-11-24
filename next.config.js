@@ -1,3 +1,8 @@
+const createMDX = require('@next/mdx')
+const remarkGfm = require('remark-gfm')
+const rehypeSlug = require('rehype-slug')
+const rehypeAutolinkHeadings = require('rehype-autolink-headings')
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -22,7 +27,27 @@ const nextConfig = {
   images: {
     formats: ["image/avif", "image/webp"],
   },
+  // 配置页面扩展名
+  pageExtensions: ['js', 'jsx', 'mdx', 'ts', 'tsx'],
 }
 
-module.exports = nextConfig
+const withMDX = createMDX({
+  options: {
+    remarkPlugins: [remarkGfm],
+    rehypePlugins: [
+      rehypeSlug,
+      [
+        rehypeAutolinkHeadings,
+        {
+          behavior: 'wrap',
+          properties: {
+            className: ['anchor'],
+          },
+        },
+      ],
+    ],
+  },
+})
+
+module.exports = withMDX(nextConfig)
 
