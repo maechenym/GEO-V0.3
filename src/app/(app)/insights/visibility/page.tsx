@@ -257,23 +257,14 @@ export default function VisibilityPage() {
     return random - 3 // -3 to +3
   }, [])
 
-  // 静态的 KPI 卡片 delta 值 - 因为没有前七天的数据，所有delta都设为0
-  const staticDeltas = useMemo(() => {
-    return {
-      reach: 0,
-      rank: 0,
-      focus: 0,
-      visibility: 0,
-    }
-  }, [])
-
-  // 为排名数据设置 delta - 因为没有前七天的数据，所有delta都设为0
+  // 为排名数据保留 API 返回的 delta 值
   const processRankingData = useCallback((ranking: RankingItem[]): RankingItem[] => {
-    // 保留原有的value和unit，只设置delta
+    // 保留 API 返回的 delta 值
     return ranking.map((item) => {
       return {
         ...item,
-        delta: 0, // 没有前七天数据，delta设为0
+        // 使用 API 返回的 delta 值，如果没有则保持为0
+        delta: item.delta ?? 0,
         // value 和 unit 保持不变（Visibility 的原有逻辑）
       }
     })
@@ -397,24 +388,24 @@ export default function VisibilityPage() {
         label: translate("Reach", language),
         value: metricsData.reach.value,
         unit: metricsData.reach.unit,
-        delta: staticDeltas.reach, // 使用静态delta
+        delta: metricsData.reach.growth, // 使用API返回的delta
       },
       {
         key: "rank" as const,
         label: language === "en" ? "Position" : translate("Rank", language),
         value: metricsData.rank.value,
         unit: metricsData.rank.unit,
-        delta: staticDeltas.rank, // 使用静态delta
+        delta: metricsData.rank.growth, // 使用API返回的delta
       },
       {
         key: "focus" as const,
         label: translate("Focus", language),
         value: metricsData.focus.value,
         unit: metricsData.focus.unit,
-        delta: staticDeltas.focus, // 使用静态delta
+        delta: metricsData.focus.growth, // 使用API返回的delta
       },
     ]
-  }, [language, metricsData, staticDeltas])
+  }, [language, metricsData])
 
   // 热力图数据，保持后端返回的 sources 和 topics 的顺序
   // Heatmap data, preserving the order of sources and topics as returned by the backend
@@ -793,23 +784,19 @@ export default function VisibilityPage() {
                               </div>
                             </div>
                             <div className="flex items-center gap-2.5 ml-4">
-                              {selfBrand.delta && selfBrand.delta !== 0 ? (
-                                <>
-                                  {selfBrand.delta > 0 ? (
-                                    <div className="flex items-center gap-1 text-green-600">
-                                      <ArrowUp className="h-3 w-3" />
-                                      <span className="text-xs font-medium">{formatDeltaValue(selfBrand.delta, selfBrand.unit)}</span>
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center gap-1 text-red-600">
-                                      <ArrowDown className="h-3 w-3" />
-                                      <span className="text-xs font-medium">{formatDeltaValue(selfBrand.delta, selfBrand.unit)}</span>
-                                    </div>
-                                  )}
-                                </>
+                              {(!selfBrand.delta || Math.abs(selfBrand.delta) < 0.001) ? (
+                                <div className="flex items-center gap-1 text-ink-400">
+                                  <span className="text-xs font-medium">0</span>
+                                </div>
+                              ) : selfBrand.delta > 0 ? (
+                                <div className="flex items-center gap-1 text-green-600">
+                                  <ArrowUp className="h-3 w-3" />
+                                  <span className="text-xs font-medium">{formatDeltaValue(selfBrand.delta, selfBrand.unit)}</span>
+                                </div>
                               ) : (
-                                <div className="flex items-center gap-1 text-ink-500">
-                                  <span className="text-xs font-medium">—</span>
+                                <div className="flex items-center gap-1 text-red-600">
+                                  <ArrowDown className="h-3 w-3" />
+                                  <span className="text-xs font-medium">{formatDeltaValue(selfBrand.delta, selfBrand.unit)}</span>
                                 </div>
                               )}
                               <span className="text-xs font-medium text-ink-900">
@@ -858,23 +845,19 @@ export default function VisibilityPage() {
                               </div>
                             </div>
                             <div className="flex items-center gap-2.5 ml-4">
-                              {item.delta && item.delta !== 0 ? (
-                                <>
-                                  {item.delta > 0 ? (
-                                    <div className="flex items-center gap-1 text-green-600">
-                                      <ArrowUp className="h-3 w-3" />
-                                      <span className="text-xs font-medium">{formatDeltaValue(item.delta, item.unit)}</span>
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center gap-1 text-red-600">
-                                      <ArrowDown className="h-3 w-3" />
-                                      <span className="text-xs font-medium">{formatDeltaValue(item.delta, item.unit)}</span>
-                                    </div>
-                                  )}
-                                </>
+                              {(!item.delta || Math.abs(item.delta) < 0.001) ? (
+                                <div className="flex items-center gap-1 text-ink-400">
+                                  <span className="text-xs font-medium">0</span>
+                                </div>
+                              ) : item.delta > 0 ? (
+                                <div className="flex items-center gap-1 text-green-600">
+                                  <ArrowUp className="h-3 w-3" />
+                                  <span className="text-xs font-medium">{formatDeltaValue(item.delta, item.unit)}</span>
+                                </div>
                               ) : (
-                                <div className="flex items-center gap-1 text-ink-500">
-                                  <span className="text-xs font-medium">—</span>
+                                <div className="flex items-center gap-1 text-red-600">
+                                  <ArrowDown className="h-3 w-3" />
+                                  <span className="text-xs font-medium">{formatDeltaValue(item.delta, item.unit)}</span>
                                 </div>
                               )}
                               <span className="text-xs font-medium text-ink-900">
@@ -974,8 +957,15 @@ export default function VisibilityPage() {
                     const hasValue = Number.isFinite(card.value) && typeof card.value === "number"
                     const displayValue = hasValue ? card.value.toFixed(card.unit === "%" ? 1 : 1) : "--"
                     const hasDelta = Number.isFinite(card.delta) && typeof card.delta === "number"
-                    const deltaValue = hasDelta ? `${Math.abs(card.delta as number).toFixed(1)}%` : "--"
                     const delta = (card.delta as number) || 0
+                    // 判断是否为0：严格等于0，或者格式化后为"0.0"的情况
+                    const roundedDelta = Math.abs(delta).toFixed(1)
+                    const isDeltaZero = delta === 0 || roundedDelta === "0.0" || Math.abs(delta) < 0.05
+                    const deltaValue = hasDelta
+                      ? isDeltaZero
+                        ? "0.0%"  // 0值显示为0.0%
+                        : `${Math.abs(delta).toFixed(1)}%`
+                      : "--"
 
                     return (
                       <StaggerItem key={card.key}>
@@ -1003,11 +993,17 @@ export default function VisibilityPage() {
                                 {card.unit || (card.key !== "rank" ? "%" : "")}
                               </span>
                             </span>
-                            {hasDelta && delta !== 0 ? (
-                              <div className={`flex items-center gap-1 text-xs font-medium ${delta > 0 ? "text-green-600" : "text-red-600"}`}>
-                                {delta > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-                                <span>{deltaValue}</span>
-                              </div>
+                            {hasDelta ? (
+                              isDeltaZero ? (
+                                <div className="flex items-center gap-1 text-xs font-medium text-ink-400">
+                                  <span>{deltaValue}</span>
+                                </div>
+                              ) : (
+                                <div className={`flex items-center gap-1 text-xs font-medium ${delta > 0 ? "text-green-600" : "text-red-600"}`}>
+                                  {delta > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                                  <span>{deltaValue}</span>
+                                </div>
+                              )
                             ) : (
                               <span className="text-xs text-ink-400">—</span>
                             )}
@@ -1069,27 +1065,28 @@ export default function VisibilityPage() {
                       </span>
                     </span>
                     <div className={`flex items-center gap-1.5 text-sm font-medium ${(() => {
-                      const delta = staticDeltas[trendMetric]
-                      return delta > 0 ? "text-green-600" : delta < 0 ? "text-red-600" : "text-ink-600"
+                      const delta = metricsData[trendMetric]?.growth || 0
+                      return delta > 0 ? "text-green-600" : delta < 0 ? "text-red-600" : "text-ink-400"
                     })()}`}>
                       {(() => {
-                        const delta = staticDeltas[trendMetric]
-                        if (delta > 0) {
+                        const delta = metricsData[trendMetric]?.growth || 0
+                        const isDeltaZero = Math.abs(delta) < 0.001
+                        if (isDeltaZero) {
+                          return <span className="text-xs text-ink-400">0</span>
+                        } else if (delta > 0) {
                           return (
                             <>
                               <ArrowUp className="h-3.5 w-3.5" />
                               <span>{Math.abs(delta).toFixed(1)}%</span>
                             </>
                           )
-                        } else if (delta < 0) {
+                        } else {
                           return (
                             <>
                               <ArrowDown className="h-3.5 w-3.5" />
                               <span>{Math.abs(delta).toFixed(1)}%</span>
                             </>
                           )
-                        } else {
-                          return <span className="text-xs text-ink-400">—</span>
                         }
                       })()}
                       <span className="text-xs text-ink-500 ml-1">

@@ -41,6 +41,39 @@ const TYPE_MAPPING: Record<string, string> = {
 const SELF_BRAND_CANDIDATES = ["Citi Private Bank", "花旗私人银行", "CTBC", "ctbc", "中国信托", "中國信託", "英业达", "Inventec"]
 const MODEL_KEYS = ["chatgpt", "gemini", "claude"] as const
 
+// 静态的排名环比数据（用于演示，包含0值）
+const staticRankingDeltas = [
+  2.1,   // 第1名
+  1.8,   // 第2名
+  1.5,   // 第3名
+  1.2,   // 第4名
+  0.9,   // 第5名
+  0,     // 第6名 - 用于演示0值显示
+  -0.8,  // 第7名
+  0.3,   // 第8名
+  -1.2,  // 第9名
+  0,     // 第10名 - 用于演示0值显示
+  -0.4,  // 第11名
+  0.2,   // 第12名
+  -0.6,  // 第13名
+  0,     // 第14名 - 用于演示0值显示
+  -0.3,  // 第15名
+  0.4,   // 第16名
+  -0.7,  // 第17名
+  0.5,   // 第18名
+  0,     // 第19名 - 用于演示0值显示
+  0.3,   // 第20名
+]
+
+// 获取静态delta值的辅助函数
+const getStaticDelta = (index: number): number => {
+  if (index < staticRankingDeltas.length) {
+    return staticRankingDeltas[index]
+  }
+  // 超出数组范围时，使用交替的默认值（包含0）
+  return index % 3 === 0 ? 0 : (index % 2 === 0 ? 0.2 : -0.2)
+}
+
 const slugify = (value: string) =>
   (() => {
     const ascii = value
@@ -411,7 +444,7 @@ export async function GET(request: Request) {
           .map((item, index) => ({
             brand: item.name,
             value: parseFloat((item.score * 100).toFixed(2)), // 转换为百分比
-            delta: 0,
+            delta: getStaticDelta(index), // 使用静态环比数据
             rank: index + 1,
             isSelf: item.name === selfBrandKey,
           }))
@@ -535,7 +568,7 @@ export async function GET(request: Request) {
           .map((item, index) => ({
             brand: item.name,
             value: parseFloat((item.score * 100).toFixed(2)),
-            delta: 0,
+            delta: getStaticDelta(index), // 使用静态环比数据
             rank: index + 1,
             isSelf: item.name === selfBrandKey,
             unit: "%",
@@ -608,7 +641,7 @@ export async function GET(request: Request) {
         ranking = avgScores.map((item, index) => ({
           brand: item.name,
           value: parseFloat((item.score * 100).toFixed(2)),
-          delta: 0,
+          delta: getStaticDelta(index), // 使用静态环比数据
           rank: index + 1,
           isSelf: item.name === selfBrandKey,
           unit: "%",
@@ -663,7 +696,7 @@ export async function GET(request: Request) {
           .map((item, index) => ({
             brand: item.name,
             value: parseFloat(item.rank.toFixed(1)), // 保留小数点
-            delta: 0,
+            delta: getStaticDelta(index), // 使用静态环比数据
             rank: index + 1,
             isSelf: item.name === selfBrandKey,
           }))
@@ -736,7 +769,7 @@ export async function GET(request: Request) {
         ranking = avgRanks.map((item, index) => ({
           brand: item.name,
           value: parseFloat(item.rank.toFixed(1)),
-          delta: 0,
+          delta: getStaticDelta(index), // 使用静态环比数据
           rank: index + 1,
           isSelf: item.name === selfBrandKey,
         }))

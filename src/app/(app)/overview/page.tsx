@@ -583,12 +583,12 @@ export default function OverviewPage() {
     const selfBrandsInRanking = apiData.ranking.filter((c) => c.isSelf)
     console.log('[Overview] Self brands in ranking before sort:', selfBrandsInRanking.map(b => ({ name: b.name, isSelf: b.isSelf, rank: b.rank, score: b.score })))
     
-    // API已经按score排序并分配了rank，直接使用API返回的ranking
+    // API已经按score排序并分配了rank，直接使用API返回的ranking（包含delta值）
     return apiData.ranking.map((brand) => {
-      // 因为没有前七天的数据，所有delta都设为0
       return {
         ...brand,
-        delta: 0, // 没有前七天数据，delta设为0
+        // 使用API返回的delta值，如果没有则保持为0
+        delta: brand.delta ?? 0,
       }
     })
   }, [apiData?.ranking, dateRange.start, dateRange.end])
@@ -702,17 +702,21 @@ export default function OverviewPage() {
     navigateWithDateParams("/insights/intent", { model: selectedModel })
   }, [navigateWithDateParams, selectedModel])
 
-  // 静态的delta值（增长概率）- 因为没有前七天的数据，所有delta都设为0
-  const staticDeltas = useMemo(() => {
-    return {
-      "brand-influence": 0,
-      "visibility": 0,
-      "sentiment": 0,
-    }
-  }, [])
+  // 从API数据中获取KPI的delta值
+  const kpiDeltas = useMemo(() => {
+    if (!data?.kpis) return {}
+    const deltas: Record<string, number> = {}
+    data.kpis.forEach((kpi) => {
+      deltas[kpi.name.toLowerCase()] = kpi.delta
+    })
+    return deltas
+  }, [data?.kpis])
 
   const primaryKpiCards = useMemo<OverviewPrimaryCard[]>(() => {
     if (!data) return []
+
+    // 获取品牌影响力的changeRate作为delta
+    const brandInfluenceDelta = data.brandInfluence?.changeRate ?? 0
 
     const cards: (OverviewPrimaryCard | null)[] = [
       {
@@ -720,7 +724,7 @@ export default function OverviewPage() {
         label: translate("Brand influence", language),
         tooltipKey: "Brand influence_tooltip",
         value: data.brandInfluence?.current ?? null,
-        delta: staticDeltas["brand-influence"], // 使用静态delta
+        delta: brandInfluenceDelta, // 使用API返回的changeRate
         unit: "",
         formatValue: (value) => Math.round(value).toString(),
         deltaFormatter: (delta) => `${Math.abs(delta).toFixed(1)}%`,
@@ -732,7 +736,7 @@ export default function OverviewPage() {
             tooltipKey: "Visibility_tooltip",
             value: visibilityMetric.value,
             unit: visibilityMetric.unit,
-            delta: staticDeltas["visibility"], // 使用静态delta
+            delta: kpiDeltas["visibility"] ?? visibilityMetric.delta ?? 0, // 使用API返回的delta
             onClick: handleVisibilityNavigate,
             formatValue: (value) => value.toFixed(1),
             deltaFormatter: (delta) => `${Math.abs(delta).toFixed(1)}%`,
@@ -745,7 +749,7 @@ export default function OverviewPage() {
             tooltipKey: "Sentiment_tooltip",
             value: sentimentMetric.value,
             unit: sentimentMetric.unit,
-            delta: staticDeltas["sentiment"], // 使用静态delta
+            delta: kpiDeltas["sentiment"] ?? sentimentMetric.delta ?? 0, // 使用API返回的delta
             onClick: handleSentimentNavigate,
             formatValue: (value) => value.toFixed(2),
             deltaFormatter: (delta) => `${Math.abs(delta).toFixed(1)}%`,
@@ -754,7 +758,7 @@ export default function OverviewPage() {
     ]
 
     return cards.filter((card): card is OverviewPrimaryCard => Boolean(card))
-  }, [data, language, visibilityMetric, sentimentMetric, handleVisibilityNavigate, handleSentimentNavigate, staticDeltas])
+  }, [data, language, visibilityMetric, sentimentMetric, handleVisibilityNavigate, handleSentimentNavigate, kpiDeltas])
 
   const topSources = useMemo(() => data?.sources ?? [], [data?.sources])
   const topTopics = useMemo(() => data?.topics ?? [], [data?.topics])
@@ -836,12 +840,19 @@ export default function OverviewPage() {
                         : (kpi.value as number).toFixed(1)
                       : "--"
                     const hasDelta = typeof kpi.delta === "number" && Number.isFinite(kpi.delta)
+                    const rawDelta = kpi.delta as number
+                    const delta = rawDelta ?? 0
+                    // 判断是否为0：严格等于0，或者格式化后为"0.0"的情况（绝对值小于0.05）
+                    // 使用更宽松的判断，因为格式化后会显示为0.0%
+                    const roundedDelta = Math.abs(delta).toFixed(1)
+                    const isDeltaZero = delta === 0 || roundedDelta === "0.0" || Math.abs(delta) < 0.05
                     const deltaValue = hasDelta
-                      ? kpi.deltaFormatter
-                        ? kpi.deltaFormatter(kpi.delta as number)
-                        : Math.abs(kpi.delta as number).toFixed(1)
+                      ? isDeltaZero
+                        ? kpi.deltaFormatter ? kpi.deltaFormatter(0) : "0.0%"  // 0值显示为0.0%
+                        : kpi.deltaFormatter
+                          ? kpi.deltaFormatter(delta)
+                          : Math.abs(delta).toFixed(1)
                       : "--"
-                    const delta = (kpi.delta as number) || 0
                     const clickable = typeof kpi.onClick === "function"
 
                     return (
@@ -884,15 +895,21 @@ export default function OverviewPage() {
                                 <span className="text-xs font-medium ml-1 text-ink-500">{kpi.unit}</span>
                               )}
                             </span>
-                            {hasDelta && delta !== 0 ? (
-                              <div className={`flex items-center gap-1 text-xs font-medium ${delta > 0 ? "text-green-600" : "text-red-600"}`}>
-                                {delta > 0 ? (
-                                  <ArrowUp className="h-3 w-3" />
-                                ) : (
-                                  <ArrowDown className="h-3 w-3" />
-                                )}
-                                <span>{deltaValue}</span>
-                              </div>
+                            {hasDelta ? (
+                              isDeltaZero ? (
+                                <div className="flex items-center gap-1 text-xs font-medium text-ink-400">
+                                  <span>{deltaValue}</span>
+                                </div>
+                              ) : (
+                                <div className={`flex items-center gap-1 text-xs font-medium ${delta > 0 ? "text-green-600" : "text-red-600"}`}>
+                                  {delta > 0 ? (
+                                    <ArrowUp className="h-3 w-3" />
+                                  ) : (
+                                    <ArrowDown className="h-3 w-3" />
+                                  )}
+                                  <span>{deltaValue}</span>
+                                </div>
+                              )
                             ) : (
                               <span className="text-xs text-ink-400">—</span>
                             )}
@@ -1149,19 +1166,19 @@ export default function OverviewPage() {
                             </div>
                           </div>
                           <div className="flex items-center gap-2.5 ml-4">
-                            {selfBrand.delta > 0 ? (
+                            {(!selfBrand.delta || Math.abs(selfBrand.delta) < 0.001) ? (
+                              <div className="flex items-center gap-1 text-ink-400">
+                                <span className="text-xs font-medium">0</span>
+                              </div>
+                            ) : selfBrand.delta > 0 ? (
                               <div className="flex items-center gap-1 text-green-600">
                                 <ArrowUp className="h-3 w-3" />
                                 <span className="text-xs font-medium">{Math.round(selfBrand.delta)}</span>
                               </div>
-                            ) : selfBrand.delta < 0 ? (
+                            ) : (
                               <div className="flex items-center gap-1 text-red-600">
                                 <ArrowDown className="h-3 w-3" />
                                 <span className="text-xs font-medium">{Math.abs(Math.round(selfBrand.delta))}</span>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1 text-ink-500">
-                                <span className="text-xs font-medium">0</span>
                               </div>
                             )}
                             <span className="text-xs font-medium text-ink-900">{Math.round(selfBrand.score)}</span>
@@ -1210,19 +1227,19 @@ export default function OverviewPage() {
                               </div>
                             </div>
                             <div className="flex items-center gap-2.5 ml-4">
-                              {competitor.delta > 0 ? (
+                              {(!competitor.delta || Math.abs(competitor.delta) < 0.001) ? (
+                                <div className="flex items-center gap-1 text-ink-400">
+                                  <span className="text-xs font-medium">0</span>
+                                </div>
+                              ) : competitor.delta > 0 ? (
                                 <div className="flex items-center gap-1 text-green-600">
                                   <ArrowUp className="h-3 w-3" />
                                   <span className="text-xs font-medium">{Math.round(competitor.delta)}</span>
                                 </div>
-                              ) : competitor.delta < 0 ? (
+                              ) : (
                                 <div className="flex items-center gap-1 text-red-600">
                                   <ArrowDown className="h-3 w-3" />
                                   <span className="text-xs font-medium">{Math.abs(Math.round(competitor.delta))}</span>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-1 text-ink-500">
-                                  <span className="text-xs font-medium">0</span>
                                 </div>
                               )}
                               <span className="text-xs font-medium text-ink-900">{Math.round(competitor.score)}</span>

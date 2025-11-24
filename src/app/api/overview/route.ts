@@ -691,12 +691,12 @@ export async function GET(request: Request) {
       }
     }
     
-    // 因为没有前七天的数据，所有delta都设为0
-    const reachDelta = 0
-    const rankDelta = 0
-    const focusDelta = 0
-    const sentimentDelta = 0
-    const visibilityDelta = 0
+    // 静态的环比数据（用于演示）
+    const reachDelta = 2.3 // +2.3%
+    const rankDelta = isOneDayRange ? 1 : 0.2 // 1天模式：排名上升1位；多天模式：+0.2
+    const focusDelta = 1.5 // +1.5%
+    const sentimentDelta = 0.03 // +0.03
+    const visibilityDelta = 1.8 // +1.8%
 
     const kpis: OverviewKPI[] = [
       {
@@ -860,11 +860,35 @@ export async function GET(request: Request) {
       }
     }
 
+    // 静态的排名环比数据（用于演示，包含0值）
+    const staticRankingDeltas = [
+      2.1,   // 第1名
+      1.8,   // 第2名
+      1.5,   // 第3名
+      1.2,   // 第4名
+      0.9,   // 第5名
+      0,     // 第6名 - 用于演示0值显示
+      -0.8,  // 第7名
+      0.3,   // 第8名
+      -1.2,  // 第9名
+      0,     // 第10名 - 用于演示0值显示
+      -0.4,  // 第11名
+      0.2,   // 第12名
+      -0.6,  // 第13名
+      0,     // 第14名 - 用于演示0值显示
+      -0.3,  // 第15名
+      0.4,   // 第16名
+      -0.7,  // 第17名
+      0.5,   // 第18名
+      0,     // 第19名 - 用于演示0值显示
+      0.3,   // 第20名
+    ]
+
     // 构建排名列表（包括所有品牌，按total_score排序）
     sortedCompetitors.forEach((comp, index) => {
       const currentScore = comp.score
-      // 因为没有前七天的数据，所有delta都设为0
-      const delta = 0
+      // 使用静态的环比数据，如果超出数组范围则使用默认值（包含0的情况用于演示）
+      const delta = index < staticRankingDeltas.length ? staticRankingDeltas[index] : (index % 3 === 0 ? 0 : (index % 2 === 0 ? 0.2 : -0.2))
       
       // 品牌名显示逻辑：所有品牌都强制转换为英文
       let displayName = translateToEnglish(comp.name) // 强制转换为英文
@@ -886,7 +910,7 @@ export async function GET(request: Request) {
         rank: index + 1,
         name: displayName,
         score: parseFloat(currentScore.toFixed(1)), // 大数字显示1位小数
-        delta: 0, // 没有前七天数据，delta设为0
+        delta: parseFloat(delta.toFixed(1)), // 使用静态环比数据
         isSelf: isSelf,
       })
     })
@@ -984,11 +1008,13 @@ export async function GET(request: Request) {
         if (brandInfluenceTrend.length > 1) {
           previousInfluence = brandInfluenceTrend[brandInfluenceTrend.length - 2]?.brandInfluence || currentInfluence
         } else {
-          previousInfluence = currentInfluence
+          // 静态演示数据：生成一个略低于当前值的previous值，产生正增长
+          previousInfluence = currentInfluence * 0.97 // 97% 的当前值，产生约 3% 的增长
         }
       } else {
-        // 7day或其他多天模式：如果没有上一周期数据，设为当前值（changeRate将为0）
-        previousInfluence = currentInfluence
+        // 7day或其他多天模式：静态演示数据
+        // 生成一个略低于当前值的previous值，产生正增长
+        previousInfluence = currentInfluence * 0.95 // 95% 的当前值，产生约 5% 的增长
       }
     }
     
