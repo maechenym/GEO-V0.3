@@ -88,6 +88,8 @@ export function PlanCard({ plan, isCurrentPlan = false }: PlanCardProps) {
     setIsRedirecting(true)
 
     try {
+      console.log("[PlanCard] Creating checkout session for plan:", plan.planId)
+      
       // Create Stripe Checkout Session with 7-day trial
       const response = await apiClient.post("/api/stripe/create-checkout-session", {
         priceId: plan.priceId,
@@ -95,11 +97,15 @@ export function PlanCard({ plan, isCurrentPlan = false }: PlanCardProps) {
         trialPeriodDays: 7, // 7-day free trial
       })
 
+      console.log("[PlanCard] Checkout session response:", response.data)
+
       const { checkoutUrl } = response.data
 
       if (checkoutUrl) {
         // Redirect to Stripe Checkout (real mode)
+        console.log("[PlanCard] Redirecting to Stripe Checkout:", checkoutUrl)
         window.location.href = checkoutUrl
+        return
       } else {
         // Mock mode: simulate successful subscription with trial
         setIsRedirecting(false)
@@ -129,11 +135,16 @@ export function PlanCard({ plan, isCurrentPlan = false }: PlanCardProps) {
         }
         
         // Redirect to overview page (mock mode: default payment successful)
+        console.log("[PlanCard] Mock mode: redirecting to overview")
         router.push("/overview?success=true&trial=true")
       }
     } catch (error) {
       console.error("Failed to create checkout session:", error)
       setIsRedirecting(false)
+      
+      // 即使 API 失败，也尝试跳转到计划页面（让用户可以看到计划详情）
+      router.push("/settings/plan")
+      
       // TODO: Show error toast
     }
   }
